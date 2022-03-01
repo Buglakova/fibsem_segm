@@ -1,0 +1,4 @@
+{
+    "python.pythonPath": "/g/kreshuk/buglakova/anaconda3/envs/dl-image-pytorch-gpu/bin/python",
+    "terminal.integrated.inheritEnv": false
+}
