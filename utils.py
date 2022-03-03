@@ -2,6 +2,7 @@ import os
 import matplotlib.pyplot as plt
 from functools import partial
 from itertools import product
+import imageio
 
 import numpy as np
 import torch
@@ -17,151 +18,292 @@ from sklearn.model_selection import train_test_split
 
 from imageio import imread
 from tqdm import tqdm, trange
+from pathlib import Path
+
+from torchvision import transforms
+
 
 
 #
 # helper functions to load and split the data
 #
 
-def load_cifar(data_dir):
-    images = []
-    labels = []
-
-    categories = os.listdir(data_dir)
-    categories.sort()
-
-    for label_id, category in tqdm(enumerate(categories), total=len(categories)):
-        category_dir = os.path.join(data_dir, category)
-        image_names = os.listdir(category_dir)
-        for im_name in image_names:
-            im_file = os.path.join(category_dir, im_name)
-            images.append(np.asarray(imread(im_file)))
-            labels.append(label_id)
-
-    # from list of arrays to a single numpy array by stacking along new "batch" axis
-    images = np.concatenate([im[None] for im in images], axis=0)
-    labels = np.array(labels)
-
-    return images, labels
+def convert_to_chan(mask):
+    # 0 is out of sample
+    # 1 is border
+    # 2 is extracellular
+    # >2 are cell instances
+    mask_chan = np.stack([mask == 0, mask == 1, mask == 2, mask > 2], axis=-1).astype(int)
+    return mask_chan
 
 
-def make_cifar_train_val_split(images, labels, validation_fraction=0.15):
-    (train_images, val_images,
-     train_labels, val_labels) = train_test_split(images, labels, shuffle=True,
-                                                  test_size=validation_fraction,
-                                                  stratify=labels)
-    assert len(train_images) == len(train_labels)
-    assert len(val_images) == len(val_labels)
-    assert len(train_images) + len(val_images) == len(images)
-    return train_images, train_labels, val_images, val_labels
+def split_with_overlap(image, tile_size=(256, 512), overlap=0.1):
+    nonzero_ind = np.nonzero(image)
+    tile_size = np.array(tile_size)
+    overlap_size = np.floor(overlap * tile_size)
+    trunc_size = (tile_size - overlap_size).astype(int)
+    ind_min = np.min(nonzero_ind, axis=1)
+    ind_max = np.max(nonzero_ind, axis=1)
+
+    n_tiles = np.ceil((ind_max - ind_min) / trunc_size).astype(int)
+    ind_min = np.multiply(np.indices(dimensions=n_tiles), trunc_size[:, None, None]) + ind_min[:, None, None]
+    ind_min = ind_min.reshape((2, -1))
+    ind_max = ind_min + tile_size[:, None]
+    return n_tiles, ind_min, ind_max
+
+
+def crop_tile(img, ind_min, ind_max):
+    pad_w = ind_max - img.shape
+    pad_w[pad_w < 0] = 0
+    pad_w = np.stack((np.zeros_like(pad_w), pad_w)).T
+    img_padded = np.pad(img, pad_width=pad_w)
+    return img_padded[ind_min[0]:ind_max[0], ind_min[1]:ind_max[1], ...]
+
+
+def stack_chan(segm):
+    segm = segm[0, :, :, :]
+    return np.hstack(segm)
 
 
 #
 # transformations and datasets
 #
 
-def to_channel_first(image, target):
-    """ Transform images with color channel last (WHC) to channel first (CWH)
-    """
-    # put channel first
-    image = image.transpose((2, 0, 1))
-    return image, target
 
+class EMDataset(Dataset):
+    """ A PyTorch dataset to load volume EM images and manually segmented masks """
+    def __init__(self, img_path, mask_path, tile_size=(512, 512), transform=None):
+        self.img_path = Path(img_path)  # the directory with all the training samples
+        self.mask_path = Path(mask_path)  # the directory with all the training samples
+        self.img_list = sorted(list(self.img_path.glob("*.tiff"))) # list the samples
+        self.mask_list = sorted(list(self.mask_path.glob("*.tiff")))
 
-def normalize(image, target, channel_wise=True):
-    eps = 1.e-6
-    image = image.astype('float32')
-    chan_min = image.min(axis=(1, 2), keepdims=True)
-    image -= chan_min
-    chan_max = image.max(axis=(1, 2), keepdims=True)
-    image /= (chan_max + eps)
-    return image, target
+        self.tile_size = tile_size
+        self.transform = transform    # transformations to apply to both inputs and targets
+        #  transformations to apply just to inputs
+        self.inp_transforms = [transforms.ToTensor()]
+        # transformations to apply just to targets
+        self.mask_transforms = transforms.ToTensor()
 
-
-# finally, we need to transform our input from a numpy array to a torch tensor
-def to_tensor(image, target):
-    return torch.from_numpy(image), torch.tensor([target], dtype=torch.int64)
-
-
-# we also need a way to compose multiple transformations
-def compose(image, target, transforms):
-    for trafo in transforms:
-        image, target = trafo(image, target)
-    return image, target
-
-
-class DatasetWithTransform(Dataset):
-    """ Our minimal dataset class. It holds data and target
-    as well as optional transforms that are applied to data and target
-    on the fly when data is requested via the [] operator.
-    """
-    def __init__(self, data, target, transform=None):
-        assert isinstance(data, np.ndarray)
-        assert isinstance(target, np.ndarray)
-        self.data = data
-        self.target = target
-        if transform is not None:
-            assert callable(transform)
-        self.transform = transform
-
-    # exposes the [] operator of our class
-    def __getitem__(self, index):
-        data, target = self.data[index], self.target[index]
-        if self.transform is not None:
-            data, target = self.transform(data, target)
-        return data, target
-
+    # get the total number of samples
     def __len__(self):
-        return self.data.shape[0]
+        return len(self.img_list)
 
 
-def get_default_cifar_transform():
-    trafos = [to_channel_first, normalize, to_tensor]
-    trafos = partial(compose, transforms=trafos)
-    return trafos
+    # fetch the training sample given its index
+    def __getitem__(self, idx):
+        img_path = self.img_list[idx]
+        mask_path = self.mask_list[idx]
+        # we'll be using Pillow library for reading files
+        # since many torchvision transforms operate on PIL images 
+        image = imageio.imread(img_path)
+        mask = imageio.imread(mask_path)
+        
+        tile_layout, ind_min, ind_max = split_with_overlap(image, tile_size=self.tile_size, overlap=0.3)
+        n_tiles = ind_min.shape[1]
+        # print(n_tiles, ind_min.shape, ind_max.shape)
+
+        # Crop random tile
+        rand_n = np.random.randint(low=0, high=n_tiles)
+        # print(rand_n)
+
+        img_tile = crop_tile(image, ind_min[:, rand_n], ind_max[:, rand_n])
+        mask_tile = crop_tile(mask, ind_min[:, rand_n], ind_max[:, rand_n])
+
+        # Convert mask into channels
+        mask_tile = convert_to_chan(mask_tile)
+        # print("Converted tile shape ", mask_tile.shape)
+
+        # Apply transformations
+        inp_transforms_idx = self.inp_transforms.copy()
+        inp_transforms_idx.append(transforms.Normalize([np.mean(image)], [np.std(image)]))
+        inp_transforms_idx = transforms.Compose(self.inp_transforms)
+        img_tile = inp_transforms_idx(img_tile)
+        mask_tile = self.mask_transforms(mask_tile)
+
+        # print("tile shape", img_tile.shape)
+        if self.transform is not None:
+            img_tile, mask_tile = self.transform([img_tile, mask_tile])
+        return img_tile, mask_tile
 
 
-def make_cifar_datasets(cifar_dir, transform=None, validation_fraction=0.15):
-    images, labels = load_cifar(os.path.join(cifar_dir, 'train'))
-    (train_images, train_labels,
-     val_images, val_labels) = make_cifar_train_val_split(images, labels, validation_fraction)
-
-    if transform is None:
-        transform = get_default_cifar_transform()
-
-    train_dataset = DatasetWithTransform(train_images, train_labels, transform=transform)
-    val_dataset = DatasetWithTransform(val_images, val_labels, transform=transform)
-    return train_dataset, val_dataset
+    def split_tiles(self, idx):
+        pass
 
 
-def make_cifar_test_dataset(cifar_dir, transform=None):
-    images, labels = load_cifar(os.path.join(cifar_dir, 'test'))
+    def get_tile_list(self, idx):
+        pass
 
-    if transform is None:
-        transform = get_default_cifar_transform()
-
-    dataset = DatasetWithTransform(images, labels, transform=transform)
-    return dataset
+#
+# visualisation functionality
+#
 
 
 #
-# checkpoints
+# models
 #
 
-def save_checkpoint(model, optimizer, epoch, save_path):
-    torch.save({
-        'epoch': epoch,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict()
-    }, save_path)
+class UNet(nn.Module):
+    """ UNet implementation
+    Arguments:
+      in_channels: number of input channels
+      out_channels: number of output channels
+      final_activation: activation applied to the network output
+    """
+    
+    # _conv_block and _upsampler are just helper functions to
+    # construct the model.
+    # encapsulating them like so also makes it easy to re-use
+    # the model implementation with different architecture elements
+    
+    # Convolutional block for single layer of the decoder / encoder
+    # we apply to 2d convolutions with relu activation
+    def _conv_block(self, in_channels, out_channels):
+        return nn.Sequential(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+                             nn.ReLU(),
+                             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+                             nn.ReLU())       
 
 
-def load_checkpoin(save_path, model, optimizer):
-    checkpoint = torch.load(save_path)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    epoch = checkpoint['epoch']
-    return model, optimizer, epoch
+    # upsampling via transposed 2d convolutions
+    def _upsampler(self, in_channels, out_channels):
+        return nn.ConvTranspose2d(in_channels, out_channels,
+                                kernel_size=2, stride=2)
+    
+    def __init__(self, in_channels=1, out_channels=1, tile_size=(512, 512),
+                 final_activation=None):
+        super().__init__()
+        
+        # the depth (= number of encoder / decoder levels) is
+        # hard-coded to 4
+        self.depth = 4
+
+        # the final activation must either be None or a Module
+        if final_activation is not None:
+            assert isinstance(final_activation, nn.Module), "Activation must be torch module"
+        
+        # all lists of conv layers (or other nn.Modules with parameters) must be wraped
+        # itnto a nn.ModuleList
+        init_chan = 64
+        
+        # modules of the encoder path
+        self.encoder = nn.ModuleList([self._conv_block(in_channels, init_chan),
+                                      self._conv_block(init_chan, init_chan * 2 ** 1),
+                                      self._conv_block(init_chan * 2 ** 1, init_chan * 2 ** 2),
+                                      self._conv_block(init_chan * 2 ** 2, init_chan * 2 ** 3)])
+        # the base convolution block
+        self.base = self._conv_block(init_chan * 2 ** 3, init_chan * 2 ** 4)
+        # modules of the decoder path
+        self.decoder = nn.ModuleList([self._conv_block(init_chan * 2 ** 4, init_chan * 2 ** 3),
+                                      self._conv_block(init_chan * 2 ** 3, init_chan * 2 ** 2),
+                                      self._conv_block(init_chan * 2 ** 2, init_chan * 2 ** 1),
+                                      self._conv_block(init_chan * 2 ** 1, init_chan)])
+        
+        # the pooling layers; we use 2x2 MaxPooling
+        self.poolers = nn.ModuleList([nn.MaxPool2d(2) for _ in range(self.depth)])
+        # the upsampling layers
+        image_size = tile_size[0]
+        self.upsamplers = nn.ModuleList([self._upsampler(init_chan * 2 ** 4, init_chan * 2 ** 3),
+                                         self._upsampler(init_chan * 2 ** 3, init_chan * 2 ** 2),
+                                         self._upsampler(init_chan * 2 ** 2, init_chan * 2 ** 1),
+                                         self._upsampler(init_chan * 2 ** 1, init_chan)])
+        # output conv and activation
+        # the output conv is not followed by a non-linearity, because we apply
+        # activation afterwards
+        self.out_conv = nn.Conv2d(init_chan, out_channels, 1)
+        self.activation = final_activation
+    
+    def forward(self, input):
+        x = input
+        # apply encoder path
+        encoder_out = []
+        for level in range(self.depth):
+            x = self.encoder[level](x)
+            encoder_out.append(x)
+            x = self.poolers[level](x)
+
+        # apply base
+        x = self.base(x)
+        
+        # apply decoder path
+        encoder_out = encoder_out[::-1]
+        for level in range(self.depth):
+            print(level)
+            x = self.upsamplers[level](x)
+            x = self.decoder[level](torch.cat((x, encoder_out[level]), dim=1))
+        
+        # apply output conv and activation (if given)
+        x = self.out_conv(x)
+        if self.activation is not None:
+            x = self.activation(x)
+        return x
+
+
+
+#
+# loss
+#
+
+# Copied from https://github.com/constantinpape/torch-em/blob/4b3205048a21308b30a832170aa2d41f400eff98/torch_em/loss/dice.py
+
+def flatten_samples(input_):
+    """
+    Flattens a tensor or a variable such that the channel axis is first and the sample axis
+    is second. The shapes are transformed as follows:
+        (N, C, H, W) --> (C, N * H * W)
+        (N, C, D, H, W) --> (C, N * D * H * W)
+        (N, C) --> (C, N)
+    The input must be atleast 2d.
+    """
+    # Get number of channels
+    num_channels = input_.size(1)
+    # Permute the channel axis to first
+    permute_axes = list(range(input_.dim()))
+    permute_axes[0], permute_axes[1] = permute_axes[1], permute_axes[0]
+    # For input shape (say) NCHW, this should have the shape CNHW
+    permuted = input_.permute(*permute_axes).contiguous()
+    # Now flatten out all but the first axis and return
+    flattened = permuted.view(num_channels, -1)
+    return flattened
+
+
+def dice_score(input_, target, invert=False, channelwise=True, eps=1e-7):
+    if channelwise:
+        # Flatten input and target to have the shape (C, N),
+        # where N is the number of samples
+        input_ = flatten_samples(input_)
+        target = flatten_samples(target)
+        # Compute numerator and denominator (by summing over samples and
+        # leaving the channels intact)
+        numerator = (input_ * target).sum(-1)
+        denominator = (input_ * input_).sum(-1) + (target * target).sum(-1)
+        channelwise_score = 2 * (numerator / denominator.clamp(min=eps))
+        if invert:
+            channelwise_score = 1. - channelwise_score
+        # Sum over the channels to compute the total score
+        score = channelwise_score.sum()
+    else:
+        numerator = (input_ * target).sum()
+        denominator = (input_ * input_).sum() + (target * target).sum()
+        score = 2. * (numerator / denominator.clamp(min=eps))
+        if invert:
+            score = 1. - score
+    return score
+
+
+class DiceLoss(nn.Module):
+    def __init__(self, channelwise=True, eps=1e-7):
+        super().__init__()
+        self.channelwise = channelwise
+        self.eps = eps
+
+        # all torch_em classes should store init kwargs to easily recreate the init call
+        self.init_kwargs = {"channelwise": channelwise, "eps": self.eps}
+
+    def forward(self, input_, target):
+        return dice_score(input_, target,
+                          invert=True, channelwise=self.channelwise,
+                          eps=self.eps)
 
 
 #
@@ -169,260 +311,135 @@ def load_checkpoin(save_path, model, optimizer):
 #
 
 
-def get_current_lr(optimizer):
-    lrs = [param_group.get('lr', None) for param_group in optimizer.param_groups]
-    lrs = [lr for lr in lrs if lr is not None]
-    # to keep things simple we only return one of the valid lrs
-    return lrs[0]
 
+# apply training for one epoch
+def train(model, loader, optimizer, loss_function,
+          epoch, device, log_interval=100, log_image_interval=20, tb_logger=None):
 
-def train(model, loader,
-          loss_function, optimizer,
-          device, epoch,
-          tb_logger, log_image_interval=100):
-    """ Train model for one epoch.
-
-    Parameters:
-    model - the model we are training
-    loader - the data loader that provides the training data
-        (= pairs of images and labels)
-    loss_function - the loss function that will be optimized
-    optimizer - the optimizer that is used to update the network parameters
-        by backpropagation of the loss
-    device - the device used for training. this can either be the cpu or gpu
-    epoch - which trainin eppch are we in? we keep track of this for logging
-    tb_logger - the tensorboard logger, it is used to communicate with tensorboard
-    log_image_interval - how often do we send images to tensborboard?
-    """
-
-    # set model to train mode
+    # set the model to train mode
     model.train()
-
-    n_batches = len(loader)
-
-    # log the learning rate before the epoch
-    lr = get_current_lr(optimizer)
-    tb_logger.add_scalar(tag='learning-rate',
-                         scalar_value=lr,
-                         global_step=epoch * n_batches)
-
-    # iterate over the training batches provided by the loader
+    
+    # iterate over the batches of this epoch
     for batch_id, (x, y) in enumerate(loader):
-
-        # send data and target tensors to the active device
-        x = x.to(device)
-        y = y.to(device)
-
-        # set the gradients to zero, to start with "clean" gradients
-        # in this training iteration
+        # move input and target to the active device (either cpu or gpu)
+        x, y = x.to(device), y.to(device)
+        
         optimizer.zero_grad()
-
-        # apply the model to get the prediction
+        
+        # apply model, calculate loss and run backwards pass
         prediction = model(x)
-
-        # calculate the loss (negative log likelihood loss)
-        # the loss function expects a 1d tensor, so we get rid of the second
-        # singleton dimensions that is added by the loader when stacking across the batch function
-        loss_value = loss_function(prediction, y[:, 0])
-
-        # calculate the gradients (`loss.backward()`)
-        # and apply them to the model parameters according
-        # to our optimizer (`optimizer.step()`)
-        loss_value.backward()
+        print(prediction.shape)
+        loss = loss_function(prediction, y)
+        loss.backward()
         optimizer.step()
+        
+        # log to console
+        if batch_id % log_interval == 0:
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                  epoch, batch_id * len(x),
+                  len(loader.dataset),
+                  100. * batch_id / len(loader), loss.item()))
 
-        # log the loss value to tensorboard
-        step = epoch * n_batches + batch_id
-        tb_logger.add_scalar(tag='train-loss',
-                             scalar_value=loss_value.item(),
-                             global_step=step)
-
-        # check if we log images, and if we do then send the
-        # current image to tensorboard
-        if log_image_interval is not None and step % log_image_interval == 0:
-            # TODO make logging more pretty, see
-            # https://www.tensorflow.org/tensorboard/image_summaries
-            tb_logger.add_images(tag='input',
-                                 img_tensor=x.to('cpu'),
-                                 global_step=step)
+       # log to tensorboard
+        if tb_logger is not None:
+            step = epoch * len(loader) + batch_id
+            tb_logger.add_scalar(tag='train_loss', scalar_value=loss.item(), global_step=step)
+            # check if we log images in this iteration
+            if step % log_image_interval == 0:
+                tb_logger.add_images(tag='input', img_tensor=x[0, :, :, :].to('cpu'), global_step=step, dataformats="CHW")
+                tb_logger.add_images(tag='target', img_tensor=stack_chan(y.to('cpu')), global_step=step, dataformats="HW")
+                tb_logger.add_images(tag='prediction', img_tensor=stack_chan(prediction.to('cpu').detach()), global_step=step, dataformats="HW")
 
 
-def validate(model, loader, loss_function,
-             device, step, tb_logger=None):
-    """
-    Validate the model predictions.
-
-    Parameters:
-    model - the model to be evaluated
-    loader - the loader providing images and labels
-    loss_function - the loss function
-    device - the device used for prediction (cpu or gpu)
-    step - the current training step. we need to know this for logging
-    tb_logger - the tensorboard logger. if 'None', logging is disabled
-    """
-    # set the model to eval mode
+# run validation after training epoch
+def validate(model, loader, loss_function, metric, device, step=None, tb_logger=None):
+    # set model to eval mode
     model.eval()
-    n_batches = len(loader)
-
-    # we record the loss and the predictions / labels for all samples
-    mean_loss = 0
-    predictions = []
-    labels = []
-
-    # the model parameters are not updated during validation,
-    # hence we can disable gradients in order to save memory
+    # running loss and metric values
+    val_loss = 0
+    val_metric = 0
+    
+    # disable gradients during validation
     with torch.no_grad():
+        
+        # iterate over validation loader and update loss and metric values
         for x, y in loader:
-            x = x.to(device)
-            y = y.to(device)
+            x, y = x.to(device), y.to(device)
             prediction = model(x)
-
-            # update the loss
-            # the loss function expects a 1d tensor, so we get rid of the second
-            # singleton dimensions that is added by the loader when stacking across the batch function
-            mean_loss += loss_function(prediction, y[:, 0]).item()
-
-            # compute the most likely class predictions
-            # note that 'max' returns a tuple with the
-            # index of the maximun value (which correponds to the predicted class)
-            # as second entry
-            prediction = prediction.max(1, keepdim=True)[1]
-
-            # store the predictions and labels
-            predictions.append(prediction[:, 0].to('cpu').numpy())
-            labels.append(y[:, 0].to('cpu').numpy())
-
-    # predictions and labels to numpy arrays
-    predictions = np.concatenate(predictions)
-    labels = np.concatenate(labels)
-
-    # log the validation results if we have a tensorboard
+            val_loss += loss_function(prediction, y)
+            val_metric += metric(prediction, y)
+    
+    # normalize loss and metric
+    val_loss /= len(loader)
+    val_metric /= len(loader)
+    
     if tb_logger is not None:
+        assert step is not None, "Need to know the current step to log validation results"
+        tb_logger.add_scalar(tag='val_loss', scalar_value=val_loss, global_step=step)
+        tb_logger.add_scalar(tag='val_metric', scalar_value=val_metric, global_step=step)
+        # we always log the last validation images
+        tb_logger.add_images(tag='val_input', img_tensor=x[0, :, :, :].to('cpu'), global_step=step, dataformats="CHW")
+        # tb_logger.add_images(tag='val_target', img_tensor=y.to('cpu')[:, 1, :, :], global_step=step)
+        print("Test y shape", y.shape)
+        print("Test prediction shape", prediction.shape)
+        tb_logger.add_images(tag='val_target', img_tensor=stack_chan(y.to('cpu')), global_step=step, dataformats="HW")
+        tb_logger.add_images(tag='val_prediction', img_tensor=stack_chan(prediction.to('cpu')), global_step=step, dataformats="HW")
+        
+    print('\nValidate: Average loss: {:.4f}, Average Metric: {:.4f}\n'.format(val_loss, val_metric))
 
-        accuracy_error = 1. - metrics.accuracy_score(labels, predictions)
-        mean_loss /= n_batches
-
-        # TODO log more advanced things like confusion matrix, see
-        # https://www.tensorflow.org/tensorboard/image_summaries
-
-        tb_logger.add_scalar(tag="validation-error",
-                             global_step=step,
-                             scalar_value=accuracy_error)
-        tb_logger.add_scalar(tag="validation-loss",
-                             global_step=step,
-                             scalar_value=mean_loss)
-
-    # return all predictions and labels for further evaluation
-    return predictions, labels
+    return val_loss
 
 
-def run_cifar_training(model, optimizer,
-                       train_loader, val_loader,
-                       device, name, n_epochs):
-    """ Complete training logic
-    """
+def run_training(train_loader, val_loader, model_path, logger_path, n_epochs):
+    # check if we have  a gpu
+    # 4 because my GPU is 4
+    if torch.cuda.is_available():
+        print("GPU is available")
+        device = torch.device(4)
+    else:
+        print("GPU is not available")
+        device = torch.device("cpu")
 
-    best_accuracy = 0.
+    # start a tensorboard writer
 
-    loss_function = nn.NLLLoss()
-    loss_function.to(device)
-
-    scheduler = ReduceLROnPlateau(optimizer,
-                                  mode='max',
-                                  factor=0.5,
-                                  patience=1)
-
-    checkpoint_path = f'best_checkpoint_{name}.tar'
-    log_dir = f'runs/{name}'
-    tb_logger = SummaryWriter(log_dir)
-
-    for epoch in trange(n_epochs):
-        train(model, train_loader, loss_function, optimizer,
-              device, epoch, tb_logger=tb_logger)
-        step = (epoch + 1) * len(train_loader)
-
-        pred, labels = validate(model, val_loader, loss_function,
-                                device, step,
-                                tb_logger=tb_logger)
-        val_accuracy = metrics.accuracy_score(labels, pred)
-        scheduler.step(val_accuracy)
-
-        # otherwise, check if this is our best epoch
-        if val_accuracy > best_accuracy:
-            # if it is, save this check point
-            best_accuracy = val_accuracy
-            save_checkpoint(model, optimizer, epoch, checkpoint_path)
-
-    return checkpoint_path
+    logger = SummaryWriter(logger_path)
 
 
-#
-# visualisation functionality
-#
+    # build a default unet with sigmoid activation
+    # to normalize predictions to [0, 1]
+    net = UNet(1, 4, final_activation=nn.Sigmoid())
+    # move the model to GPU
+    net = net.to(device)
 
-def make_confusion_matrix(labels, predictions, categories, ax):
-    cm = metrics.confusion_matrix(labels, predictions)
+    # use adam optimizer
+    learning_rate = 1e-4
+    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode= "min", factor=0.5, patience=5)
 
-    # Normalize the confusion matrix.
-    cm = np.around(cm.astype('float') / cm.sum(axis=1)[:, np.newaxis], decimals=2)
+    # build the dice coefficient metric
+    metric = DiceLoss()
+    loss_function = DiceLoss() 
 
-    im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-    ax.set_title("Confusion matrix")
-    plt.colorbar(im)
-    tick_marks = np.arange(len(categories))
-    plt.xticks(tick_marks, categories, rotation=45)
-    plt.yticks(tick_marks, categories)
+    # during the training you can inspect the 
+    # predictions in the tensorboard
+    min_loss = 1
+    for epoch in range(n_epochs):
+        # train
+        train(net, train_loader, optimizer, loss_function,
+                epoch, device, log_interval=100, log_image_interval=20, tb_logger=logger)
 
-    # Use white text if squares are dark; otherwise black.
-    threshold = cm.max() / 2.
-    for i, j in product(range(cm.shape[0]), range(cm.shape[1])):
-        color = "white" if cm[i, j] > threshold else "black"
-        plt.text(j, i, cm[i, j], horizontalalignment="center", color=color)
+        step = epoch * len(train_loader.dataset)
+        # validate
+        val_loss = validate(net, val_loader, loss_function, metric, device, step=step, tb_logger=logger)
 
-    plt.tight_layout()
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-
-
-#
-# models
-#
-
-class SimpleCNN(nn.Module):
-    def __init__(self, n_classes):
-        super().__init__()
-        self.n_classes = n_classes
-
-        # the convolutions
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=12, kernel_size=5)
-        self.conv2 = nn.Conv2d(in_channels=12, out_channels=24, kernel_size=3)
-        self.pool = nn.MaxPool2d(2, 2)
-
-        # the fully connected part of the network
-        # after applying the convolutions and poolings, the tensor
-        # has the shape 24 x 6 x 6, see below
-        self.fc = nn.Sequential(
-            nn.Linear(24 * 6 * 6, 120),
-            nn.ReLU(),
-            nn.Linear(120, 60),
-            nn.ReLU(),
-            nn.Linear(60, self.n_classes)
-        )
-        self.activation = nn.LogSoftmax(dim=1)
-
-    def apply_convs(self, x):
-        # input image has shape 3 x  32 x 32
-        x = self.pool(F.relu(self.conv1(x)))
-        # shape after conv: 12 x 28 x 28
-        # shape after pooling: 12 x 14 X 14
-        x = self.pool(F.relu(self.conv2(x)))
-        # shape after conv: 24 x 12 x 12
-        # shape after pooling: 24 x 6 x 6
-        return x
-
-    def forward(self, x):
-        x = self.apply_convs(x)
-        x = x.view(-1, 24 * 6 * 6)
-        x = self.fc(x)
-        x = self.activation(x)
-        return x
+        # If loss decreased, save model
+        if val_loss < min_loss:
+                min_loss = val_loss
+                model_path = "models/try.pt"
+                print(f"Save model to {model_path}")
+                torch.save({
+                            'epoch': epoch,
+                            'model_state_dict': net.state_dict(),
+                            'optimizer_state_dict': optimizer.state_dict(),
+                            'val_loss': val_loss,
+                            }, model_path)
