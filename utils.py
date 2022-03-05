@@ -17,6 +17,7 @@ import sklearn.metrics as metrics
 from sklearn.model_selection import train_test_split
 
 from imageio import imread
+from skimage.io import imsave
 from tqdm import tqdm, trange
 from pathlib import Path
 
@@ -43,6 +44,9 @@ def split_with_overlap(image, tile_size=(256, 512), overlap=0.1):
     overlap_size = np.floor(overlap * tile_size)
     trunc_size = (tile_size - overlap_size).astype(int)
     ind_min = np.min(nonzero_ind, axis=1)
+    # print(ind_min)
+    # Split the whole image
+    ind_min = np.array((0, 0))
     ind_max = np.max(nonzero_ind, axis=1)
 
     n_tiles = np.ceil((ind_max - ind_min) / trunc_size).astype(int)
@@ -143,6 +147,161 @@ class EMDataset(Dataset):
 # models
 #
 
+class EMDataset(Dataset):
+    """ A PyTorch dataset to load volume EM images and manually segmented masks """
+    def __init__(self, img_path, mask_path, tile_size=(512, 512), transform=None, overlap=0.3):
+        self.img_path = Path(img_path)  # the directory with all the training samples
+        self.mask_path = Path(mask_path)  # the directory with all the training samples
+        self.img_list = sorted(list(self.img_path.glob("*.tiff"))) # list the samples
+        self.mask_list = sorted(list(self.mask_path.glob("*.tiff")))
+
+        self.tile_size = tile_size
+        self.transform = transform    # transformations to apply to both inputs and targets
+        #  transformations to apply just to inputs
+        self.inp_transforms = [transforms.ToTensor()]
+        # transformations to apply just to targets
+        self.mask_transforms = transforms.ToTensor()
+
+        self.overlap = overlap
+
+    # get the total number of samples
+    def __len__(self):
+        return len(self.img_list)
+
+
+    # fetch the training sample given its index
+    def __getitem__(self, idx):
+        img_path = self.img_list[idx]
+        mask_path = self.mask_list[idx]
+        # we'll be using Pillow library for reading files
+        # since many torchvision transforms operate on PIL images 
+        image = imageio.imread(img_path)
+        mask = imageio.imread(mask_path)
+        
+        tile_layout, ind_min, ind_max = split_with_overlap(image, tile_size=self.tile_size, overlap=self.overlap)
+        n_tiles = ind_min.shape[1]
+        # print(n_tiles, ind_min.shape, ind_max.shape)
+
+        # Crop random tile
+        rand_n = np.random.randint(low=0, high=n_tiles)
+        # print(rand_n)
+
+        img_tile = crop_tile(image, ind_min[:, rand_n], ind_max[:, rand_n])
+        mask_tile = crop_tile(mask, ind_min[:, rand_n], ind_max[:, rand_n])
+
+        # Convert mask into channels
+        mask_tile = convert_to_chan(mask_tile)
+        # print("Converted tile shape ", mask_tile.shape)
+
+        # Apply transformations
+        inp_transforms_idx = self.inp_transforms.copy()
+        inp_transforms_idx.append(transforms.Normalize([np.mean(image)], [np.std(image)]))
+        inp_transforms_idx = transforms.Compose(self.inp_transforms)
+        img_tile = inp_transforms_idx(img_tile)
+        mask_tile = self.mask_transforms(mask_tile)
+
+        # print("tile shape", img_tile.shape)
+        if self.transform is not None:
+            img_tile, mask_tile = self.transform([img_tile, mask_tile])
+        return img_tile, mask_tile
+
+
+    def get_tile_list(self, idx):
+        img_path = self.img_list[idx]
+        image = imageio.imread(img_path)
+        tile_layout, ind_min, ind_max = split_with_overlap(image, tile_size=self.tile_size, overlap=0.3)
+
+        tiles = [crop_tile(image, ind_min[:, n], ind_max[:, n]) for n in range(ind_min.shape[1])]
+
+        # Apply transformations
+        inp_transforms_idx = self.inp_transforms.copy()
+        inp_transforms_idx.append(transforms.Normalize([np.mean(image)], [np.std(image)]))
+        inp_transforms_idx = transforms.Compose(self.inp_transforms)
+        tiles = [inp_transforms_idx(tile) for tile in tiles]
+
+        return image, tile_layout, ind_min, ind_max, tiles
+
+    def get_image(self, idx):
+        img_path = self.img_list[idx]
+        image = imageio.imread(img_path)
+        
+        return image
+
+
+    def get_mask(self, idx):
+        mask_path = self.mask_list[idx]
+        mask = imageio.imread(mask_path)
+        mask = convert_to_chan(mask)
+
+        return mask
+
+
+    def _stitch_tiles(self, ind_min, ind_max, predictions, image_shape):
+        '''
+            Predictions: array in format of NCHW, where N is number of tiles
+        '''
+        stitched = np.zeros((predictions.shape[1], *image_shape))
+        stitched_n = np.zeros((predictions.shape[1], *image_shape))
+
+        for i_min, i_max, tile in zip(ind_min.T, ind_max.T, predictions):
+            x_size = stitched.shape[1] - i_min[0]
+            y_size = stitched.shape[2] - i_min[1]
+            stitched[:, i_min[0]:i_max[0], i_min[1]:i_max[1]] += tile[:, 0:x_size, 0:y_size]
+            stitched_n[:, i_min[0]:i_max[0], i_min[1]:i_max[1]] += 1
+
+        stitched_n[stitched_n == 0] = 1
+
+        stitched = stitched / stitched_n
+
+        return stitched
+
+
+    def predict_boundaries(self, model_path):
+        # Load network
+        # 4 because my GPU is number 4
+        if torch.cuda.is_available():
+            print("GPU is available")
+            device = torch.device(4)
+        else:
+            print("GPU is not available")
+            device = torch.device("cpu")
+
+        model_loaded = UNet(1, 4, final_activation=nn.Sigmoid())
+        checkpoint = torch.load(model_path)
+        model_loaded.load_state_dict(checkpoint['model_state_dict'])
+        model_loaded = model_loaded.to(device)
+
+
+        self.stitched_predictions = []
+        for i in trange(len(self.img_list)):
+            image, tile_layout, ind_min, ind_max, tiles = self.get_tile_list(i)
+
+            predictions = []
+
+            for tile in tiles:
+                predictions.append(model_loaded(tile[None, ...].to(device)).to("cpu").detach().numpy()[0, ...])
+
+            predictions = np.array(predictions)
+            stitched = self._stitch_tiles(ind_min, ind_max, predictions, image.shape)
+            self.stitched_predictions.append(stitched)
+
+
+    def save_predictions(self, predictions_path):
+        predictions_path = Path(predictions_path)
+        print("Saving predictions to", predictions_path)
+        for idx, prediction in enumerate(self.stitched_predictions):
+            # print(self.img_list[idx])
+            # print(prediction.shape)
+            img_path = self.img_list[idx]
+            new_path = predictions_path / (img_path.stem + "_predicted" + img_path.suffix)
+            # print(new_path)
+            imsave(new_path, np.moveaxis(prediction, 0, -1))
+
+
+#
+# models
+#
+
 class UNet(nn.Module):
     """ UNet implementation
     Arguments:
@@ -237,8 +396,6 @@ class UNet(nn.Module):
         if self.activation is not None:
             x = self.activation(x)
         return x
-
-
 
 #
 # loss
