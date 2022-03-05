@@ -228,7 +228,7 @@ class UNet(nn.Module):
         # apply decoder path
         encoder_out = encoder_out[::-1]
         for level in range(self.depth):
-            print(level)
+            # print(level)
             x = self.upsamplers[level](x)
             x = self.decoder[level](torch.cat((x, encoder_out[level]), dim=1))
         
@@ -390,7 +390,7 @@ def validate(model, loader, loss_function, metric, device, step=None, tb_logger=
     return val_loss
 
 
-def run_training(train_loader, val_loader, model_path, logger_path, n_epochs):
+def run_training(train_loader, val_loader, model_path, logger_path, n_epochs, restart=False):
     # check if we have  a gpu
     # 4 because my GPU is 4
     if torch.cuda.is_available():
@@ -400,30 +400,47 @@ def run_training(train_loader, val_loader, model_path, logger_path, n_epochs):
         print("GPU is not available")
         device = torch.device("cpu")
 
-    # start a tensorboard writer
-
-    logger = SummaryWriter(logger_path)
-
-
-    # build a default unet with sigmoid activation
-    # to normalize predictions to [0, 1]
-    net = UNet(1, 4, final_activation=nn.Sigmoid())
-    # move the model to GPU
-    net = net.to(device)
-
-    # use adam optimizer
-    learning_rate = 1e-4
-    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
-    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode= "min", factor=0.5, patience=5)
-
     # build the dice coefficient metric
     metric = DiceLoss()
     loss_function = DiceLoss() 
+    # start a tensorboard writer
+    logger = SummaryWriter(logger_path)
+
+    # use adam optimizer
+    learning_rate = 1e-4
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode= "min", factor=0.5, patience=5)
+    start_epoch = 0
+
+    if restart:
+        checkpoint = torch.load(model_path)
+
+        # build a default unet with sigmoid activation
+        # to normalize predictions to [0, 1]
+        net = UNet(1, 4, final_activation=nn.Sigmoid())
+        net.load_state_dict(checkpoint['model_state_dict'])
+
+        # move the model to GPU
+        net = net.to(device)
+
+        # use adam optimizer
+        learning_rate = 1e-4
+        optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_epoch = checkpoint['epoch']
+
+    else:
+        # build a default unet with sigmoid activation
+        # to normalize predictions to [0, 1]
+        net = UNet(1, 4, final_activation=nn.Sigmoid())
+        # move the model to GPU
+        net = net.to(device)
+        optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+    
 
     # during the training you can inspect the 
     # predictions in the tensorboard
     min_loss = 1
-    for epoch in range(n_epochs):
+    for epoch in range(start_epoch, start_epoch + n_epochs):
         # train
         train(net, train_loader, optimizer, loss_function,
                 epoch, device, log_interval=100, log_image_interval=20, tb_logger=logger)
@@ -435,7 +452,7 @@ def run_training(train_loader, val_loader, model_path, logger_path, n_epochs):
         # If loss decreased, save model
         if val_loss < min_loss:
                 min_loss = val_loss
-                model_path = "models/try.pt"
+                model_path = model_path
                 print(f"Save model to {model_path}")
                 torch.save({
                             'epoch': epoch,
