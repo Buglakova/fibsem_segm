@@ -246,12 +246,44 @@ class EMDataset(Dataset):
         for i_min, i_max, tile in zip(ind_min.T, ind_max.T, predictions):
             x_size = stitched.shape[1] - i_min[0]
             y_size = stitched.shape[2] - i_min[1]
-            stitched[:, i_min[0]:i_max[0], i_min[1]:i_max[1]] += tile[:, 0:x_size, 0:y_size]
+
+            # Multiply by linearly falling mask to reduce stitching artefacts
+
+            mask = np.ones_like(tile)
+            overlap = [int((self.overlap * size)) for size in tile.shape[1:]]
+            # print(tile.shape, overlap[0])
+
+            gradient_x = np.linspace(1, 0, overlap[0])[:, None]
+            gradient_x = np.tile(gradient_x, (1, mask.shape[2]))
+            # print("Slice shape", mask[:, -overlap[0]:, :].shape)
+            # print("Mask part shape", gradient_x.shape)
+            mask[:, -overlap[0]:, :] = mask[:, -overlap[0]:, :] * gradient_x
+
+            gradient_y = np.linspace(1, 0, overlap[1])[:, None]
+            gradient_y = np.tile(gradient_y, (1, mask.shape[1]))
+            mask[:, :, -overlap[1]:] *= gradient_y.T
+
+            if i_min[0] > 0:
+                gradient_x = np.linspace(0, 1, overlap[0])[:, None]
+                gradient_x = np.tile(gradient_x, (1, mask.shape[2]))
+                mask[:, 0:overlap[0], :] *= gradient_x
+            if i_min[1] > 0:
+                
+                gradient_y = np.linspace(0, 1, overlap[1])[:, None]
+                gradient_y = np.tile(gradient_y, (1, mask.shape[1]))
+                mask[:, :, 0:overlap[1]] *= gradient_y.T
+
+            # plt.imshow(mask[2, :, :])
+            # plt.title(str(i_min))
+            # plt.colorbar()
+            # plt.show()
+            masked_tile = tile * mask
+            stitched[:, i_min[0]:i_max[0], i_min[1]:i_max[1]] += masked_tile[:, 0:x_size, 0:y_size]
             stitched_n[:, i_min[0]:i_max[0], i_min[1]:i_max[1]] += 1
 
         stitched_n[stitched_n == 0] = 1
 
-        stitched = stitched / stitched_n
+        # stitched = stitched / stitched_n
 
         return stitched
 
@@ -296,6 +328,8 @@ class EMDataset(Dataset):
             new_path = predictions_path / (img_path.stem + "_predicted" + img_path.suffix)
             # print(new_path)
             imsave(new_path, np.moveaxis(prediction, 0, -1))
+
+
 
 
 #
