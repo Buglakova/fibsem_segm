@@ -116,5 +116,5 @@ if __name__ == "__main__":
     ds_seg = g.create_dataset("multicut", shape=shape, compression="gzip",
                                 chunks=chunks, dtype=dtype)
     ds_seg.n_threads = 8
-    print("Writing watershed")
+    print("Writing multicut")
     ds_seg[:] = seg
