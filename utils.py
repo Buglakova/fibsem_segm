@@ -23,6 +23,8 @@ from pathlib import Path
 
 from torchvision import transforms
 
+import z5py
+
 
 
 #
@@ -221,6 +223,7 @@ class EMDataset(Dataset):
 
         return image, tile_layout, ind_min, ind_max, tiles
 
+
     def get_image(self, idx):
         img_path = self.img_list[idx]
         image = imageio.imread(img_path)
@@ -234,6 +237,49 @@ class EMDataset(Dataset):
         mask = convert_to_chan(mask)
 
         return mask
+
+    def write_n5_pred(self, output_path):
+        stitched_predictions = np.array(self.stitched_predictions)
+        chunks = (1, 512, 512)
+        shape = stitched_predictions[:, 0, :, :].shape
+        compression = "gzip"
+        dtype = stitched_predictions.dtype
+
+        f = z5py.File(output_path, "a")
+        g = f.create_group("predictions")
+
+        ds_fg = g.create_dataset("foreground", shape=shape, compression="gzip",
+                                 chunks=chunks, dtype="float32")
+        ds_fg.n_threads = 8
+        ds_bd = g.create_dataset("boundaries", shape=shape, compression="gzip",
+                            chunks=chunks, dtype="float32")
+        ds_bd.n_threads = 8
+        ds_extra = g.create_dataset("extracellular", shape=shape, compression="gzip",
+                            chunks=chunks, dtype="float32")
+        ds_extra.n_threads = 8
+        ds_bg = g.create_dataset("background", shape=shape, compression="gzip",
+                            chunks=chunks, dtype="float32")
+        ds_bg.n_threads = 8
+
+        ds_fg[:] = stitched_predictions[:, 3, :, :]
+        ds_bd[:] = stitched_predictions[:, 1, :, :]
+        ds_extra[:] = stitched_predictions[:, 2, :, :]
+        ds_bg[:] = stitched_predictions[:, 0, :, :]
+
+
+    def write_n5_raw(self, output_path):
+        raw_data = np.array([self.get_image(i) for i in range(len(self.img_list))])
+        chunks = (1, 512, 512)
+        shape = raw_data.shape
+        compression = "gzip"
+        dtype = raw_data.dtype
+
+        f = z5py.File(output_path, "a")
+        g = f.create_group("raw")
+        ds_raw = g.create_dataset("raw_data", shape=shape, compression="gzip",
+                                 chunks=chunks, dtype="uint8")
+        ds_raw.n_threads = 8
+        ds_raw[:] = raw_data
 
 
     def _stitch_tiles(self, ind_min, ind_max, predictions, image_shape):
