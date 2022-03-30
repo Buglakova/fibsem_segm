@@ -28,6 +28,15 @@ def read_boundaries(f: z5py.File):
     return boundaries
 
 
+def read_extracellular(f: z5py.File):
+    g = f["predictions"]
+    g.n_threads = 8
+    print("Reading extracellularspace probabilities into memory")
+    # boundaries = g["boundaries"][:]
+    extra = g["extracellular"][:]
+    return extra
+
+
 def get_zero_component(img: np.ndarray):
     bg = label(img == 0)
     component_sizes = [np.count_nonzero(bg == i) for i in np.unique(bg)[1:]]
@@ -81,7 +90,13 @@ if __name__ == "__main__":
     f_out = z5py.File(args.output_path, "a")
 
     boundaries = read_boundaries(f)
+    extra = read_extracellular(f)
     raw = read_raw(f_raw)
+
+    # Sum up  boundaries and exrtacellular space probabilities,
+    # Because otherwise some cells get joint through extracellular part
+
+    boundaries = boundaries + extra
 
     # Get foreground mask
     # It's predicted weirdly by unet,
