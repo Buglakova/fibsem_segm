@@ -1,0 +1,1 @@
+python train.py /scratch/buglakova/F107_bin2_619-639_predictions/full_raw.n5 /scratch/buglakova/3D_UNet_data/ground_truth_labels_CZXY.n5 raw/raw_data labels/out_boundary_extra_fg default_3D_unet

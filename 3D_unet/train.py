@@ -50,7 +50,14 @@ class ApplyMask:
 
         # mask the prediction
         prediction = prediction * mask
+        # print("Prediction range", prediction.min(), prediction.max())
+        
         target = target * mask
+        # print("Target range", target.min(), target.max())
+
+        # with open("metrics.txt", "a") as f:
+        #     f.write("pred " + str(prediction.min()) + str(prediction.max()))
+        #     f.write(r"/n target " + str(target.min()) + str(target.max()))
         return prediction, target
 
 
@@ -90,7 +97,7 @@ if __name__ == "__main__":
     loss = "dice"
     metric = "dice"
 
-    loss_function = get_loss(loss)
+    loss_function = get_loss(loss, loss_transform=ApplyMask())
     metric_function = get_loss(metric, loss_transform=ApplyMask())
 
     kwargs = dict(
@@ -124,7 +131,6 @@ if __name__ == "__main__":
         )
 
     # Train
-    experiment_name = "default_network"
     n_iterations = 50000
     learning_rate = 1.0e-3
 
@@ -169,31 +175,31 @@ if __name__ == "__main__":
 
     import torch_em.util
 
-for_dij = additional_weight_formats is not None and "torchscript" in additional_weight_formats
+    for_dij = additional_weight_formats is not None and "torchscript" in additional_weight_formats
 
-training_data = None
+    training_data = None
 
-pred_str = "out_boundary_extra_fg"
+    pred_str = "out_boundary_extra_fg"
 
-default_doc = f"""#{experiment_name}
+    default_doc = f"""#{experiment_name}
 
-This model was trained with [the torch_em 3d UNet notebook](https://github.com/constantinpape/torch-em/blob/main/experiments/3D-UNet-Training.ipynb).
-"""
-if pred_str:
-    default_doc += f"It predicts {pred_str}.\n"
+    This model was trained with [the torch_em 3d UNet notebook](https://github.com/constantinpape/torch-em/blob/main/experiments/3D-UNet-Training.ipynb).
+    """
+    if pred_str:
+        default_doc += f"It predicts {pred_str}.\n"
 
-training_summary = torch_em.util.get_training_summary(trainer, to_md=True, lr=learning_rate)
-default_doc += f"""## Training Schedule
+    training_summary = torch_em.util.get_training_summary(trainer, to_md=True, lr=learning_rate)
+    default_doc += f"""## Training Schedule
 
-{training_summary}
-"""
+    {training_summary}
+    """
 
-if doc is None:
-    doc = default_doc
+    if doc is None:
+        doc = default_doc
 
-torch_em.util.export_bioimageio_model(
-    trainer, export_folder, input_optional_parameters=True,
-    for_deepimagej=for_dij, training_data=training_data, documentation=doc
-)
-torch_em.util.add_weight_formats(export_folder, additional_weight_formats)
+    torch_em.util.export_bioimageio_model(
+        trainer, export_folder, input_optional_parameters=True,
+        for_deepimagej=for_dij, training_data=training_data, documentation=doc
+    )
+    torch_em.util.add_weight_formats(export_folder, additional_weight_formats)
 
