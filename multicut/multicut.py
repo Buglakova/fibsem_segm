@@ -122,16 +122,19 @@ if __name__ == "__main__":
     ds_ws.n_threads = 8
     print("Writing watershed")
     ds_ws[:] = ws
-
-    # Run multicut
-    print("Run multicut ...")
-    seg = run_multicut(ws, boundaries, beta=beta)
-
-    # Store multicut
-    print("Write segmentation after multicut")
     g = f_out.create_group("segmentation")
-    ds_seg = g.create_dataset("multicut", shape=shape, compression="gzip",
-                                chunks=chunks, dtype=dtype)
-    ds_seg.n_threads = 8
-    print("Writing multicut")
-    ds_seg[:] = seg
+
+    for beta in [0.001, 0.01, 0.1, 0.5, 0.6, 0.9, 0.99, 0.999]:
+        print(f"Beta = {beta}")
+        # Run multicut
+        print("Run multicut ...")
+        seg = run_multicut(ws, boundaries, beta=beta)
+
+        # Store multicut
+        print("Write segmentation after multicut")
+        
+        ds_seg = g.create_dataset("multicut_" + str(beta), shape=shape, compression="gzip",
+                                    chunks=chunks, dtype=np.uint32)
+        ds_seg.n_threads = 8
+        print("Writing multicut")
+        ds_seg[:] = seg 
