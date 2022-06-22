@@ -130,3 +130,6 @@ dmypy.json
 
 # Tensorboard logs
 *tfevents*
+
+# Mobie temporary files
+tmp*
