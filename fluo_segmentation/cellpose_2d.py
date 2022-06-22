@@ -8,6 +8,14 @@ from cellpose.dynamics import compute_masks
 import torch
 from pathlib import Path
 import z5py
+import skimage.filters as filters
+
+
+def remove_background(img):
+    filtered_image = img / filters.gaussian(img, sigma=25)
+    filtered_image = filtered_image - np.nanmedian(filtered_image)
+    filtered_image = np.nan_to_num(filtered_image)
+    return filtered_image
 
 
 if __name__=="__main__":
@@ -26,6 +34,8 @@ if __name__=="__main__":
     # Read the volume
     roi = np.s_[:, : , :]
     raw = read_volume(f_fluo, "raw", roi)
+
+    filtered_raw = np.array([remove_background(img) for img in raw])
 
     # PyTorch device
     # Set device
@@ -57,20 +67,55 @@ if __name__=="__main__":
     # you can set the average cell `diameter` in pixels yourself (recommended)
     # diameter can be a list or a single number for all images
 
-    print("Raw shape", raw.shape)
-    masks, flows, styles, diams = model.eval(raw, diameter=None, channels=channels, z_axis=0)
+    # print("Raw shape", raw.shape)
+    # masks, flows, styles, diams = model.eval(raw, diameter=None, channels=channels, z_axis=0)
 
-    print("Masks: ", masks.shape, type(masks))
-    print("Flows: ", flows.shape, type(flows))
+    # print("Masks: ", masks.shape, type(masks))
+    # # print("Flows: ", flows.shape, type(flows))
 
     
+    # chunks = (1, 512, 512)
+    # shape = np.array(masks).shape
+    # compression = "gzip"
+    # dtype = np.array(masks).dtype
+    # print("Segmentation type: ", dtype)
+
+    # n5_key = "cellpose"
+    # # ds = f_out.create_dataset(n5_key, shape=shape, compression=compression,
+    # #                     chunks=chunks, dtype=dtype, n_threads=8)
+    # print(f"Writing to {output_n5_path}, key {n5_key}")
+    # # ds[:] = np.array(masks)
+
+    # print("Saving cellpose examples")
+    # nimg = raw.shape[0]
+    # for idx in range(0, nimg, 5):
+    #     maski = masks[idx]
+    #     flowi = flows[idx][0]
+
+    #     fig = plt.figure(figsize=(12,5))
+    #     plot.show_segmentation(fig, raw[idx, :, :], maski, flowi, channels=channels)
+    #     plt.tight_layout()
+    #     plt.savefig(output_dir / f"{idx}_fluo_cellpose_segm.png")
+
+    # print("Saving cellpose output")
+    # io.masks_flows_to_seg(raw, 
+    #                   masks, 
+    #                   flows, 
+    #                   diams, 
+    #                   output_dir / "fluo_seg.npy", 
+    #                   channels)
+
+
+
+    masks, flows, styles, diams = model.eval(filtered_raw, diameter=None, channels=channels, z_axis=0)
+
     chunks = (1, 512, 512)
     shape = np.array(masks).shape
     compression = "gzip"
     dtype = np.array(masks).dtype
     print("Segmentation type: ", dtype)
 
-    n5_key = "cellpose"
+    n5_key = "cellpose_background"
     ds = f_out.create_dataset(n5_key, shape=shape, compression=compression,
                         chunks=chunks, dtype=dtype, n_threads=8)
     print(f"Writing to {output_n5_path}, key {n5_key}")
@@ -85,12 +130,12 @@ if __name__=="__main__":
         fig = plt.figure(figsize=(12,5))
         plot.show_segmentation(fig, raw[idx, :, :], maski, flowi, channels=channels)
         plt.tight_layout()
-        plt.savefig(output_dir / f"{idx}_fluo_cellpose_segm.png")
+        plt.savefig(output_dir / f"{idx}_fluo_cellpose_background_segm.png")
 
     print("Saving cellpose output")
     io.masks_flows_to_seg(raw, 
                       masks, 
                       flows, 
                       diams, 
-                      output_dir / "fluo_seg.npy", 
+                      output_dir / "fluo_background_seg.npy", 
                       channels)
