@@ -83,3 +83,55 @@ def objective_function(x, ref_points, moving_points):
     return np.sum(dist)  
 
 
+def get_scaling_transform(resolution: List):
+    """
+    Get scaling matrix: 4x4 matrix with scaling factors on diagonal
+    resolution: pixel sizes for each axis
+    """
+    resolution = list(resolution)
+    return np.diag(resolution + [1])
+
+
+def native_to_bdv(matrix, resolution=None, invert=True):
+    """ Convert affine matrix in native format to
+    bdv transformation parameter vector.
+    Bdv and elf expect the transformation in the opposite direction.
+    So to be directly applied the transformation also needs to be inverted.
+    (In addition to changing between the axis conventions.)
+    The bdv transformations often also include the transformation from
+    voxel space to physical space.
+    Arguments:
+        matrix [np.ndarray] - native affine transformation matrix
+        resolution [listlike] - physical resolution of the data in bdv.
+            If given, the transformation will be scaled to voxel sapec (default: None) before inverting!
+        invert [bool] - invert the resulting affine matrix.
+            This is necessary to apply the affine matrix directly in elf (default: True)
+    Returns:
+        Vector with transformation parameters
+    """
+    # TODO include scaling transformation from physical space to voxel space
+    if resolution is not None:
+        scaling_trafo = get_scaling_transform(resolution)
+        matrix = matrix @ scaling_trafo
+
+    if invert:
+        matrix = np.linalg.inv(matrix)
+
+    if matrix.shape[0] == 4:
+        trafo = [matrix[2, 2], matrix[2, 1], matrix[2, 0], matrix[2, 3],
+                 matrix[1, 2], matrix[1, 1], matrix[1, 0], matrix[1, 3],
+                 matrix[0, 2], matrix[0, 1], matrix[0, 0], matrix[0, 3]]
+    else:
+        trafo = [matrix[1, 1], matrix[1, 0], matrix[1, 2],
+                 matrix[0, 1], matrix[0, 0], matrix[0, 2]]
+    return trafo
+
+
+def affine_to_parameter_vector(matrix):
+    trafo = [matrix[0, 0], matrix[0, 1], matrix[0, 2], matrix[0, 3],
+             matrix[1, 0], matrix[1, 1], matrix[1, 2], matrix[1, 3],
+             matrix[2, 0], matrix[2, 1], matrix[2, 2], matrix[2, 3]]
+
+    return trafo
+
+

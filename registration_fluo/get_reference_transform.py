@@ -68,7 +68,7 @@ def fit_affine_transform(ref_points, moving_points, ref_res, moving_res, plots_d
 def main():
     # Set paths
 
-    scratch_dir = Path("/scratch/buglakova/data/cryofib/registration_fluo/F107_A2_3dclem")
+    scratch_dir = Path(DATA_DIR)
     fluo_dir = scratch_dir / "fluo"
     em_dir = scratch_dir / "em"
     segm_em_nuclei_dir = scratch_dir / "segm_em_nuclei"
@@ -117,7 +117,7 @@ def main():
         print(f, key)
         ds = f[key]
         attributes = ds.attrs
-        attributes["ref_affine_transform"] = affine_transform_attr
+        attributes[u8j muu ] = affine_transform_attr
 
 
 

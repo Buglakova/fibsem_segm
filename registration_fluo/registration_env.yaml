@@ -1,0 +1,24 @@
+channels:
+    - pytorch
+    - conda-forge
+name:
+    registration_env
+dependencies:
+    - affogato
+    - bioimageio.core >=0.5.0
+    - cudatoolkit>=11,<12  # set correct cuda version for your system
+    - python-elf
+    - pytorch
+    - tensorboard
+    - tifffile
+    - torchvision
+    - tqdm
+    - kornia
+    - transforms3d
+
+    - tmux
+    - vim
+    - git
+
+    - notebook
+
