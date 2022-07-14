@@ -3,8 +3,8 @@ import h5py
 from tifffile import imread
 
 def load_trackmate_data():
-    raw_path = "/g/kreshuk/buglakova/data/trackmate_spheroids/LblImg_Spheroid-3D.tif"
-    labels_path = "/g/kreshuk/buglakova/data/trackmate_spheroids/LblImg_day 6 shctrl dqcol and fn - 4_XY1479384156_Z00_T0_C0.tif"
+    raw_path = "/g/kreshuk/buglakova/data/trackmate_spheroids/Spheroid-3D.tif"
+    labels_path = "/g/kreshuk/buglakova/data/trackmate_spheroids/LblImg_Spheroid-3D.tif"
     raw = imread(raw_path)
     labels = imread(labels_path)
     return raw, labels
