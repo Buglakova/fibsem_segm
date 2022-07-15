@@ -1,6 +1,7 @@
 from pathlib import Path
 import h5py
 from tifffile import imread
+import z5py
 
 def load_trackmate_data():
     raw_path = "/g/kreshuk/buglakova/data/trackmate_spheroids/Spheroid-3D.tif"
@@ -44,3 +45,13 @@ def load_mouse_embryo_data_val():
             imgs.append(raw)
             labels.append(label)
     return imgs, labels
+
+
+def load_platynereis_memb_n5():
+    """
+        Get list of opened n5 files
+    """
+    data_dir = Path("/g/kreshuk/buglakova/data/platynereis_em_membranes/membrane")
+    n5_paths = list(data_dir.glob("*.n5"))
+    f_n5_list = [z5py.File(n5_path, "a") for n5_path in n5_paths]
+    return f_n5_list
