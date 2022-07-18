@@ -49,7 +49,7 @@ def load_mouse_embryo_data_val():
 
 def load_platynereis_memb_n5():
     """
-        Get list of opened n5 files
+        Get list of n5 file handlers
     """
     data_dir = Path("/g/kreshuk/buglakova/data/platynereis_em_membranes/membrane")
     n5_paths = list(data_dir.glob("*.n5"))

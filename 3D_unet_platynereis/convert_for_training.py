@@ -11,14 +11,26 @@ def main():
         raw = read_volume(f, "volumes/raw/s1")
         segm = read_volume(f, "volumes/labels/segmentation/s1")
 
-        # When finding boundaries, one pixel on the border of background is also marked as boundary
+        # s1, because it's the pixel size of the segmentation
+        # Segmentation is the instances
+        # Only square area in the middle is labeled, so zero out everything outside it in raw and use as out-of-sample part
+        # When finding boundaries, one pixel on the border of background is also marked as boundary, so final area should be one pixel smaller
+        # Ch 0 - "out-of-sample" background
+        # Ch 1 - "foreground" (1 - boundaries)boundaries
+        # Ch 2 - boundaries
+        
 
         print("Find boundaries")
         boundaries = find_boundaries(segm, connectivity=segm.ndim, mode="outer")
         print("Calculate channels for prediction")
+        print("erosion")
         foreground = binary_erosion((segm > 0).astype(int))
+        print("get background")
         background = 1 - foreground
-        raw[background] = 0
+        print("zero out background in raw")
+        # raw[background] = 0
+        raw_new = raw * foreground
+        print("get boundaries and cells")
         boundaries = boundaries * foreground
         cells = (1 - boundaries) * foreground
 
@@ -27,19 +39,19 @@ def main():
 
         if "3dunet/raw" not in f.keys():
             chunks = (1, 512, 512)
-            shape = raw.shape
+            shape = raw_new.shape
             compression = "gzip"
-            dtype = raw.dtype
+            dtype = raw_new.dtype
             ds = f.create_dataset("3dunet/raw", shape=shape, compression=compression,
                             chunks=chunks, dtype=dtype, n_threads=8)
         else:
             ds = f["3dunet/raw"]
         
         print(f"Writing to {f.name}, key 3dunet/raw")
-        ds[:] = raw
+        ds[:] = raw_new
 
         if "3dunet/labels" not in f.keys():
-            chunks = (1, 512, 512)
+            chunks = (3, 1, 512, 512)
             shape = labels.shape
             compression = "gzip"
             dtype = labels.dtype
