@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch_em
 from torch_em.model import AnisotropicUNet
 from torch_em.util.debug import check_loader, check_trainer, _check_plt
+from torch_em.transform.raw import get_default_raw_augmentations
+from torch_em.transform.augmentation import get_augmentations
 import torch
 
 from torch.cuda import mem_get_info
@@ -16,6 +18,9 @@ def check_data(data_paths, data_key, label_paths, label_key, rois):
     print("Loading the labels from:", label_paths, label_key)
     try:
         ds = torch_em.default_segmentation_dataset(data_paths, data_key, label_paths, label_key, patch_shape, rois=rois, with_label_channels=True, is_seg_dataset=True)
+        print("Raw dtype", ds[0][0].dtype)
+        print("Label shape", ds[0][1].shape)
+        print("Label dtype", ds[0][1].dtype)
     except Exception as e:
         print("Loading the dataset failed with:")
         raise e
@@ -95,7 +100,7 @@ if __name__ == "__main__":
     assert len(patch_shape) == 3
 
     # # Loss, metric, batch size
-    batch_size = 1
+    batch_size = 4
     loss = "dice"
     metric = "dice"
 
@@ -113,21 +118,25 @@ if __name__ == "__main__":
     print(train_ds[0][0].shape)
     val_ds = check_data(val_data_paths, data_key, val_data_paths, label_key, val_rois)
 
+    raw_transforms = get_default_raw_augmentations()
+    transforms = ["RandomHorizontalFlip3D", "RandomVerticalFlip3D", "RandomDepthicalFlip3D", "RandomElasticDeformation3D"]
+    transforms = get_augmentations(ndim=3, transforms=transforms)
 
     print("Create data loaders")
     train_loader = torch_em.default_segmentation_loader(
         train_data_paths, data_key, train_data_paths, label_key,
-        batch_size, patch_shape, with_label_channels=True
+        batch_size, patch_shape, with_label_channels=True, raw_transform=raw_transforms,
+        transform=transforms
     )
     val_loader = torch_em.default_segmentation_loader(
         train_data_paths, data_key, train_data_paths, label_key,
         batch_size, patch_shape, with_label_channels=True
     )
 
-    # print("Plot several samples")
-    # fig = _check_plt(train_loader, 5, False)
-    # fig.tight_layout()
-    # fig.savefig("train_loader_examples.png", dpi=300)
+    print("Plot several samples")
+    fig = _check_plt(train_loader, 5, False)
+    fig.tight_layout()
+    fig.savefig("train_loader_examples.png", dpi=300)
 
 
     # loss_function = get_loss(loss, loss_transform=ApplyMask())
