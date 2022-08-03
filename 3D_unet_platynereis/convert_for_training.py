@@ -22,9 +22,11 @@ def main():
 
         print("Find boundaries")
         boundaries = find_boundaries(segm, connectivity=segm.ndim, mode="outer")
+        print("Boundaries type", boundaries.dtype)
         print("Calculate channels for prediction")
         print("erosion")
         foreground = binary_erosion((segm > 0).astype(int))
+        print("Foreground type", foreground.dtype)
         print("get background")
         background = 1 - foreground
         print("zero out background in raw")
@@ -36,6 +38,7 @@ def main():
 
         labels = np.stack([background, cells, boundaries])
         print("Labels shape", labels.shape)
+        print("Labels type", labels.dtype)
 
         if "3dunet/raw" not in f.keys():
             chunks = (1, 512, 512)
