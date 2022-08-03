@@ -45,6 +45,23 @@ def write_ind(ind_exp: np.lib.index_tricks.IndexExpression):
     return start, stop, step
 
 
+def write_volume(f, arr: np.array, key, chunks=(1, 512, 512)):
+    shape = arr.shape
+    compression = "gzip"
+    dtype = arr.dtype
+
+    if key not in f.keys():
+        print(f"Created dataset {key}")
+        ds = f.create_dataset(key, shape=shape, compression=compression,
+                                chunks=chunks, dtype=dtype)
+    else:
+        print(f"Overwriting {key}")
+        ds = f[key]
+    
+    ds.n_threads = 8
+    ds[:] = arr
+
+
 def tif2n5(tif_dir: Path,
             n5_path: Path,
             n5_key: str,
