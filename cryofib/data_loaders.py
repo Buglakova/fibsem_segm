@@ -2,6 +2,7 @@ from pathlib import Path
 import h5py
 from tifffile import imread
 import z5py
+from cryofib.n5_utils import print_key_tree
 
 def load_trackmate_data():
     raw_path = "/g/kreshuk/buglakova/data/trackmate_spheroids/Spheroid-3D.tif"
@@ -51,7 +52,35 @@ def load_platynereis_memb_n5():
     """
         Get list of n5 file handlers
     """
-    data_dir = Path("/g/kreshuk/buglakova/data/platynereis_em_membranes/membrane")
-    n5_paths = list(data_dir.glob("*.n5"))
+    # data_dir = Path("/g/kreshuk/buglakova/data/platynereis_em_membranes/membrane")
+    data_dir = Path("/scratch/buglakova/data/platynereis_em_membranes/membrane")
+    n5_paths = list(data_dir.glob("train*.n5"))
+    n5_paths.sort()
     f_n5_list = [z5py.File(n5_path, "a") for n5_path in n5_paths]
+    return f_n5_list
+
+
+def load_platynereis_memb_ds():
+    """
+        Get list of datasets inside n5 files
+    """
+    # data_dir = Path("/g/kreshuk/buglakova/data/platynereis_em_membranes/membrane")
+    data_dir = Path("/scratch/buglakova/data/platynereis_em_membranes/membrane")
+    n5_paths = list(data_dir.glob("train*.n5"))
+    n5_paths.sort()
+    f_n5_list = [z5py.File(n5_path, "a") for n5_path in n5_paths]
+    raw_list = [f["3dunet/raw"] for f in f_n5_list]
+    labels_list = [f["3dunet/labels"] for f in f_n5_list]
+    return raw_list, labels_list
+
+
+def load_platynereis_pred_n5():
+    """
+        Get list of n5 file handlers
+    """
+    # data_dir = Path("/g/kreshuk/buglakova/data/platynereis_em_membranes/membrane")
+    data_dir = Path("/scratch/buglakova/data/platynereis_em_membranes/membrane")
+    n5_paths = list(data_dir.glob("*.n5"))
+    n5_paths.sort()
+    f_n5_list = [z5py.File(n5_path.parent / "predictions" / f"prediction_membrane_0{i}.n5", "w") for i, n5_path in enumerate(n5_paths)]
     return f_n5_list
