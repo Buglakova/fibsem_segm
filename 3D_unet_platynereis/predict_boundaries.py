@@ -7,7 +7,7 @@ import numpy as np
 from bioimageio.core.prediction import predict_with_padding, predict_with_tiling
 from tqdm import trange
 from xarray import DataArray
-from cryofib.data_loaders import load_platynereis_memb_ds, load_platynereis_pred_n5
+from cryofib.data_loaders import load_platynereis_memb_ds, load_platynereis_memb_n5, load_platynereis_pred_n5
 from cryofib.n5_utils import write_volume
 
 
@@ -35,7 +35,7 @@ def predict_network(raw, model_path, output_f, prefix):
 
 def main():
     print("Read raw data list")
-    raw_list, labels_list = load_platynereis_memb_ds()
+    raw_list = [f["volumes/raw/s1"]for f in load_platynereis_memb_n5()]
     print("Create prediction files")
     pred_list = load_platynereis_pred_n5()
     print(pred_list)
