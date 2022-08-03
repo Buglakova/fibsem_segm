@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch_em
 from torch_em.model import AnisotropicUNet
 from torch_em.util.debug import check_loader, check_trainer, _check_plt
-from torch_em.transform.raw import get_default_raw_augmentations
 from torch_em.transform.augmentation import get_augmentations
 import torch
 
@@ -90,7 +89,7 @@ if __name__ == "__main__":
     # 08, 09 for test
     train_data_paths, val_data_paths, data_key, label_key = get_data_paths()
 
-    experiment_name = "full"
+    experiment_name = "test"
 
     # Set parameters of the network
     # patch_shape = (32, 256, 256)
@@ -118,19 +117,19 @@ if __name__ == "__main__":
     print(train_ds[0][0].shape)
     val_ds = check_data(val_data_paths, data_key, val_data_paths, label_key, val_rois)
 
-    raw_transforms = get_default_raw_augmentations()
+
     transforms = ["RandomHorizontalFlip3D", "RandomVerticalFlip3D", "RandomDepthicalFlip3D", "RandomElasticDeformation3D"]
     transforms = get_augmentations(ndim=3, transforms=transforms)
 
     print("Create data loaders")
     train_loader = torch_em.default_segmentation_loader(
         train_data_paths, data_key, train_data_paths, label_key,
-        batch_size, patch_shape, with_label_channels=True, raw_transform=raw_transforms,
-        transform=transforms, num_workers=8
+        batch_size, patch_shape, with_label_channels=True,
+        transform=transforms
     )
     val_loader = torch_em.default_segmentation_loader(
         train_data_paths, data_key, train_data_paths, label_key,
-        batch_size, patch_shape, with_label_channels=True, num_workers=8
+        batch_size, patch_shape, with_label_channels=True
     )
 
     # print("Plot several samples")
@@ -168,20 +167,22 @@ if __name__ == "__main__":
         )
 
     # Train
-    n_iterations = 100000
+    n_iterations = 50000
     learning_rate = 1.0e-4
 
 
     # Set device
     if torch.cuda.is_available():
         print("GPU is available")
-        device = torch.device(4)
+        device = torch.device(7)
     else:
         print("GPU is not available")
         device = torch.device("cpu")
 
 
     # Set logger ?
+
+    experiment_name = "test_no_elastic"
 
     trainer = torch_em.default_segmentation_trainer(
         name=experiment_name, model=model,

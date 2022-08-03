@@ -6,6 +6,7 @@ from torch_em.model import AnisotropicUNet
 from torch_em.util.debug import check_loader, check_trainer, _check_plt
 from torch_em.transform.raw import get_default_raw_augmentations
 from torch_em.transform.augmentation import get_augmentations
+from torch_em.loss.wrapper import MaskIgnoreLabel
 import torch
 
 from torch.cuda import mem_get_info
@@ -49,25 +50,26 @@ def get_loss(loss_name, loss_transform=None):
     return loss_function
 
 
-class ApplyMask:
-    def __call__(self, prediction, target, mask_const=-1):
-        assert target.dim() == prediction.dim(), f"{target.dim()}, {prediction.dim()}"
-        assert target.shape[2:] == prediction.shape[2:], f"{str(target.shape)}, {str(prediction.shape)}"
+# class ApplyMask:
+#     def __call__(self, prediction, target, mask_const=-1):
+#         assert target.dim() == prediction.dim(), f"{target.dim()}, {prediction.dim()}"
+#         assert target.shape[2:] == prediction.shape[2:], f"{str(target.shape)}, {str(prediction.shape)}"
 
-        mask = target != mask_const
-        mask.requires_grad = False
+#         mask = target != mask_const
+#         mask.requires_grad = False
 
-        # mask the prediction
-        # print("Prediction range", prediction.min(), prediction.max())
-        prediction = prediction * mask
+#         # mask the prediction
+#         # print("Prediction range", prediction.min(), prediction.max())
+#         prediction = prediction * mask
         
-        target = target * mask
-        # print("Target range", target.min(), target.max())
+#         target = target * mask
+#         # print("Target range", target.min(), target.max())
 
-        # with open("metrics.txt", "a") as f:
-        #     f.write("pred " + str(prediction.min()) + str(prediction.max()))
-        #     f.write(r"/n target " + str(target.min()) + str(target.max()))
-        return prediction, target
+#         # with open("metrics.txt", "a") as f:
+#         #     f.write("pred " + str(prediction.min()) + str(prediction.max()))
+#         #     f.write(r"/n target " + str(target.min()) + str(target.max()))
+#         return prediction, target
+
 
 
 def get_data_paths():
@@ -90,7 +92,7 @@ if __name__ == "__main__":
     # 08, 09 for test
     train_data_paths, val_data_paths, data_key, label_key = get_data_paths()
 
-    experiment_name = "full"
+    experiment_name = "full_masked_dice_loss"
 
     # Set parameters of the network
     # patch_shape = (32, 256, 256)
@@ -139,8 +141,8 @@ if __name__ == "__main__":
     fig.savefig("train_loader_examples.png", dpi=300)
 
 
-    loss_function = get_loss(loss)
-    metric_function = get_loss(metric)
+    loss_function = get_loss(loss, loss_transform=MaskIgnoreLabel(-1))
+    metric_function = get_loss(metric, loss_transform=MaskIgnoreLabel(-1))
 
     # loss_function = get_loss(loss, loss_transform=ApplyMask())
     # metric_function = get_loss(metric, loss_transform=ApplyMask())
