@@ -133,3 +133,14 @@ dmypy.json
 
 # Mobie temporary files
 tmp*
+
+# Pytorch checkpoints
+*/checkpoints
+*.pt
+
+# Bioimage model zoo
+*/modelzoo/*
+*/bio-model/*
+
+# Random images
+*.png
