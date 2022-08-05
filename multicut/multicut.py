@@ -124,7 +124,7 @@ if __name__ == "__main__":
     ds_ws[:] = ws
     g = f_out.create_group("segmentation")
 
-    for beta in [0.001, 0.01, 0.1, 0.5, 0.6, 0.9, 0.99, 0.999]:
+    for beta in [0.4, 0.5, 0.6]:
         print(f"Beta = {beta}")
         # Run multicut
         print("Run multicut ...")
