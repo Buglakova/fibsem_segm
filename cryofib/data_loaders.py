@@ -82,5 +82,5 @@ def load_platynereis_pred_n5():
     data_dir = Path("/scratch/buglakova/data/platynereis_em_membranes/membrane")
     n5_paths = list(data_dir.glob("*.n5"))
     n5_paths.sort()
-    f_n5_list = [z5py.File(n5_path.parent / "predictions" / f"prediction_membrane_0{i}.n5", "w") for i, n5_path in enumerate(n5_paths)]
+    f_n5_list = [z5py.File(n5_path.parent / "predictions" / f"prediction_membrane_0{i}.n5", "a") for i, n5_path in enumerate(n5_paths)]
     return f_n5_list
