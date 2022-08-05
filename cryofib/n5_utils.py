@@ -59,6 +59,7 @@ def write_volume(f, arr: np.array, key, chunks=(1, 512, 512)):
         ds = f[key]
     
     ds.n_threads = 8
+    print(f"Writing array to {key}")
     ds[:] = arr
 
 
