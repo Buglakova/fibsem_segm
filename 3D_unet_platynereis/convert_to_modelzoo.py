@@ -19,7 +19,7 @@ def export_model(checkpoint, output):
         authors=[{"name": "Elena Buglakova; @Buglakova"}],
         tags=["unet"],
         license="CC-BY-4.0",
-        documentation="UNet3D for membranes trained on platynereis EM data as a test.",
+        documentation="UNet3D for membranes trained on platynereis EM data as a test with masked Dice Loss.",
         git_repo="https://github.com/Buglakova/fibsem_segm.git",
         cite=cite,
         input_optional_parameters=False,
