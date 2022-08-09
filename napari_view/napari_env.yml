@@ -1,0 +1,15 @@
+name: napari_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - napari
+  - z5py
+  - python-elf
+
+  - git
+  - tmux
+  - vim
+  
+  - notebook
+  - nb_conda_kernels
