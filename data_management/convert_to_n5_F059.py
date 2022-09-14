@@ -10,13 +10,12 @@ def rotate_x_90(array):
         """
         Edoardo:
         To register the FIBSEM data I first flip it horizontally
-        and then invert the axes as XYZ —> YZX (not clear yet why Dragonfly does it this way)
+        and then invert the axes as XYZ —> YZX [didn't work this way] (not clear yet why Dragonfly does it this way)
         to achieve a 90° rotation around the x axis to match the fluorescence orientation
         """
         assert array.ndim == 3
-        return np.moveaxis(np.flip(array, axis=2), [0, 1, 2], [2, 0, 1])
-
-
+        # return np.moveaxis(np.flip(array, axis=2), -1, 0)
+        return np.moveaxis(np.flip(array, axis=2), 0, 1)
 
 
 def main():
@@ -42,7 +41,7 @@ def main():
 
         # Convert EM data for segmentation
         em_raw, em_raw_attrs = tif2n5(tif_dir=em_path,
-                n5_path=segmentation_dir / "F059_em.n5",
+                n5_path=segmentation_dir / "F059_A1_em.n5",
                 n5_key="raw",
                 reg_exp="*.tif",
                 description="Raw FIB-SEM data F059_A1",
@@ -70,6 +69,9 @@ def main():
         em_raw_rotated = rotate_x_90(em_raw)
         em_segm_nuclei_rotated = rotate_x_90(em_segm_nuclei)
         
+        em_raw_attrs = dict(em_raw_attrs)
+        em_segm_nuclei_attrs = dict(em_segm_nuclei_attrs)
+
         em_raw_attrs["order"] = "xzy"
         em_segm_nuclei_attrs["order"] = "xzy"
 
