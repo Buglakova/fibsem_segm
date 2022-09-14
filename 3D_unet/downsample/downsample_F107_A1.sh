@@ -1,0 +1,2 @@
+python downsample.py "/g/kreshuk/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em.n5" "raw" "/g/kreshuk/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_downsamled_em.n5" "raw" 1
+python downsample.py "/g/kreshuk/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em.n5" "segmentation/ground_truth_channels" "/g/kreshuk/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_downsamled_em.n5" "segmentation/ground_truth_channels" 0
