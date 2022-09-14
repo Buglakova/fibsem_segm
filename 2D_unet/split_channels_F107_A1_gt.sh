@@ -1,0 +1,1 @@
+python split_channels.py "/g/kreshuk/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em_gt.n5" "segmentation/ground_truth" "/g/kreshuk/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em_gt.n5" "segmentation/ground_truth_channels"

@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch_em
 from torch_em.model import UNet2d
 from torch_em.util.debug import check_loader, check_trainer, _check_plt
-from torch_em.transform.raw import get_default_raw_augmentations
+from torch_em.transform.raw import get_raw_augmentations_nonorm
 from torch_em.transform.augmentation import get_augmentations
 import torch
 
@@ -54,10 +54,10 @@ if __name__ == "__main__":
     # Set paths to the train and test data
     train_data_paths = "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em_gt.n5"
     val_data_paths = "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em_gt.n5"
-    data_key = "raw"
+    data_key = "raw_norm"
     label_key = "segmentation/ground_truth_channels"
 
-    experiment_name = "2D_s0"
+    experiment_name = "2D_s0_quantile_norm"
 
     # Set parameters of the network
     # patch_shape = (32, 256, 256)
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     val_ds = check_data(val_data_paths, data_key, val_data_paths, label_key, val_rois)
 
     # raw_transforms = get_default_raw_augmentations()
-    raw_transforms = get_raw_transform(normalizer = lambda x: x)
+    raw_transforms = get_raw_augmentations_nonorm()
     transforms = ["RandomHorizontalFlip", "RandomVerticalFlip"]
     transforms = get_augmentations(ndim=2, transforms=transforms)
 
