@@ -5,6 +5,7 @@ from typing import Tuple, Dict
 from elf.io import open_file
 
 
+
 def print_key_tree(f: z5py.File):
     print(f"Key structure of z5 file {f.filename}")
     f.visititems(lambda name, obj: print(name))
@@ -13,7 +14,7 @@ def print_key_tree(f: z5py.File):
 def read_volume(f: z5py.File, key: str, roi: np.lib.index_tricks.IndexExpression = np.s_[:]):
     print(type(f))
     if isinstance(f, (str, PurePath)):
-        f = z5py.File(f, "a")
+        f = z5py.File(f, "r")
 
     try:
         ds = f[key]
