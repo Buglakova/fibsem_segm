@@ -144,3 +144,6 @@ tmp*
 
 # Random images
 *.png
+
+# Slurm output
+slurm*
