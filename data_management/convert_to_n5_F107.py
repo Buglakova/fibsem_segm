@@ -99,7 +99,7 @@ def main():
         # A bit more accurate commenting out
         convert_fluo = False
         convert_A1 = True
-        convert_A1_annotated = True
+        convert_A1_annotated = False
         convert_A2 = False
 
 
@@ -186,6 +186,17 @@ def main():
                 #         unit="nm",
                 #         resolution=(40, 30, 30),
                 #         roi=None)
+                
+                tif2n5(tif_dir=em_path / "F107_A1_junctions",
+                        n5_path=segmentation_dir / "F107_A1_em.n5",
+                        n5_key="segmentation/edoardo/junctions",
+                        reg_exp="*.tiff",
+                        description="Junction segmentation done by Edoardo in Dragonfly",
+                        order="zyx",
+                        unit="nm",
+                        resolution=(40, 30, 30),
+                        roi=None)
+                
 
                 if convert_A1_annotated:
                         em__annotated_raw, em_annotated_raw_attrs = tif2n5(tif_dir=em_path / "F107_A1_gt_corrected" / "raw",
