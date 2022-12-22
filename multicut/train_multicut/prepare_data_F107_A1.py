@@ -37,6 +37,7 @@ def main():
     raw_norm_key = "raw_norm"
     gt_key = "segmentation/corrected_instances"
     junctions_key = "segmentation/edoardo/junctions"
+    nuclei_key = "segmentation/nuclei"
     boundaries_path = Path("/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em_3Dunet.n5")
     boundaries_key = "predictions/2D_s0_quantile_norm_mean/boundaries" 
     extra_path = Path("/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em_3Dunet.n5")
@@ -48,8 +49,10 @@ def main():
     
     # Copy datasets to a new file
     roi = np.s_[:]
-    raw = read_volume(raw_path, raw_key, roi)
+    # raw = read_volume(raw_path, raw_key, roi)
     # write_volume(output_path, raw, "input/raw")
+    nuclei = read_volume(raw_path, nuclei_key, roi)
+    write_volume(output_path, nuclei, "input/nuclei")
     # raw_norm = read_volume(raw_path, raw_norm_key, roi)
     # write_volume(output_path, raw, "input/raw_norm")
     boundaries = read_volume(boundaries_path, boundaries_key, roi)
