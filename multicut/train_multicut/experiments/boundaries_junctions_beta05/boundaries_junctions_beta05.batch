@@ -1,0 +1,22 @@
+#! /bin/bash
+
+# this is an example batch script for submitting a gpu job on the cluster
+# first, we need to specify some variables for slurm, which is done via the SBATCH comments
+
+#SBATCH -J junctions05
+#SBATCH -A kreshuk                             # specify the group
+#SBATCH -N 1                                   # specify the number of cluster nodes for the job
+#SBATCH -n 8                                   # specify the number of cores per node for the job
+#SBATCH --mem 400G                               # specify the amount of memory per node
+#SBATCH -t 12:00:00                              # specify the runtime of the job IMPORTANT: your job will get killed if it exceeds this runtime (the format is d-h:mm-ss)
+#SBATCH -o slurm-%j.out-%N                         # specify the file to write the command line output to
+#SBATCH -e slurm-%j.err-%N                       # specify the file to write the error output to
+#SBATCH --mail-type=BEGIN,END,FAIL                   # specify mail notifications for your job 
+#SBATCH --mail-user=elena.buglakova@embl.de     # specify the mail address for mail notifications 
+#SBATCH -p htc-el8                             # specify the queue you want to submit to: for CPU-only job (`htc-el8`) delete this line.
+
+source /home/buglakov/.bashrc
+source activate multicut_env
+
+# finally, your script goes here
+python /g/kreshuk/buglakova/projects/fibsem_segm/multicut/train_multicut/experiments/boundaries_junctions_beta05/trained_multicut_F107_A1.py
