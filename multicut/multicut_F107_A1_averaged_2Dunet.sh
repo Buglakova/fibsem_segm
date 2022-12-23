@@ -1,0 +1,1 @@
+python multicut_averaged_unet.py "/g/kreshuk/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em.n5" "raw" "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em_3Dunet.n5/" "predictions" "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em_multicut.n5/" "2D_s0_quantile_norm_averaged"

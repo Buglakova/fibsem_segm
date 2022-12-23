@@ -5,6 +5,7 @@ from skimage.segmentation import find_boundaries, watershed
 from skimage.morphology import remove_small_objects
 from skimage.measure import label
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 import vigra
 

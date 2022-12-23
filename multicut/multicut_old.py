@@ -10,7 +10,31 @@ import elf.segmentation as eseg
 from elf.segmentation.utils import normalize_input
 from skimage.measure import label
 
-from cryofib.n5_utils import read_volume, write_volume, get_attrs
+def read_raw(f: z5py.File):
+    raw = f["raw"]["raw_data"]
+    raw.n_threads = 8
+    print("Reading raw data into memory")
+    raw = raw[:]
+    print("Raw data shape: ", raw.shape, type(raw))
+    return raw
+
+
+def read_boundaries(f: z5py.File):
+    g = f["predictions"]
+    g.n_threads = 8
+    print("Reading boundary probabilities into memory")
+    boundaries = g["boundaries"][:]
+    # extra = g["extracellular"][:]
+    return boundaries
+
+
+def read_extracellular(f: z5py.File):
+    g = f["predictions"]
+    g.n_threads = 8
+    print("Reading extracellularspace probabilities into memory")
+    # boundaries = g["boundaries"][:]
+    extra = g["extracellular"][:]
+    return extra
 
 
 def get_zero_component(img: np.ndarray):
@@ -52,32 +76,29 @@ if __name__ == "__main__":
         description="""Run watershed and multicut based on network prediction for probability of boundaries.
         """
     )
+    parser.add_argument("pred_path", type=str, help="Path to n5 file with network predictions")
+    parser.add_argument("raw_path", type=str, help="Path to n5 path with raw EM stack")
+    parser.add_argument("output_path", type=str, help="Path to n5 file, in which resulting segmentation will be stored")
+    parser.add_argument("--beta", type=float, default=0.5, help="Boundary bias for converting merge probabilities to edge costs")
 
-    parser.add_argument("raw_n5", type=str, help="Path of the input n5")
-    parser.add_argument("raw_n5_key", type=str, help="Key of the dataset in the input n5")
-
-    parser.add_argument("pred_n5", type=str, help="Path of the input n5")
-    parser.add_argument("pred_n5_key", type=str, help="Key of the dataset in the input n5")
-
-    parser.add_argument("output_n5", type=str, help="Path of the output n5")
-    parser.add_argument("output_n5_key", type=str, help="Group in the output n5 where to write waterched and multicut results")
-    
-    parser.add_argument("--beta", type=float, default=None, help="Boundary bias for converting merge probabilities to edge costs")
     args = parser.parse_args()
-
     beta = args.beta
 
     # Read predictions and raw data
-    roi = np.s_[:]
-    raw = read_volume(args.raw_n5, args.raw_n5_key, roi)
-    boundaries = read_volume(args.pred_n5, args.pred_n5_key + "/boundaries", roi)
-    extra = read_volume(args.pred_n5, args.pred_n5_key + "/extra", roi)
+    f = z5py.File(args.pred_path, "r")
+    f_raw = z5py.File(args.raw_path, "r")
+
+    # Create output file
+    f_out = z5py.File(args.output_path, "a")
+
+    boundaries = read_boundaries(f)
+    extra = read_extracellular(f)
+    raw = read_raw(f_raw)
 
     # Sum up  boundaries and exrtacellular space probabilities,
     # Because otherwise some cells get joint through extracellular part
 
     boundaries = boundaries + extra
-    boundaries = boundaries.astype(np.float32)
 
     # Get foreground mask
     # It's predicted weirdly by unet,
@@ -87,9 +108,7 @@ if __name__ == "__main__":
     # Compute watershed
     print("Compute watershed ...")
     hmap = normalize_input(boundaries)
-    threshold = 0.4
-    sigma_seeds = 2.0
-    ws, _ = eseg.stacked_watershed(hmap, mask=fg_mask, n_threads=8, threshold=threshold, sigma_seeds=sigma_seeds)
+    ws, _ = eseg.stacked_watershed(hmap, mask=fg_mask, n_threads=8, threshold=0.4, sigma_seeds=2.0)
 
     # Store watershed
     chunks = (1, 512, 512)
@@ -97,16 +116,15 @@ if __name__ == "__main__":
     compression = "gzip"
     dtype = ws.dtype
 
-    attrs = dict(get_attrs(args.raw_n5, args.raw_n5_key))
-    attrs["description"] = f"Watershed, threshold={threshold}, sigma_seeds={sigma_seeds}"
-    write_volume(args.output_n5, ws, args.output_n5_key + "/ws", attrs=attrs, chunks=chunks)
+    g = f_out.create_group("watershed")
+    ds_ws = g.create_dataset("watershed", shape=shape, compression="gzip",
+                                chunks=chunks, dtype=dtype)
+    ds_ws.n_threads = 8
+    print("Writing watershed")
+    ds_ws[:] = ws
+    g = f_out.create_group("segmentation")
 
-    if beta is None:
-        betas = [0.4, 0.5, 0.6]
-    else:
-        betas = [beta]
-
-    for beta in betas:
+    for beta in [0.4, 0.5, 0.6]:
         print(f"Beta = {beta}")
         # Run multicut
         print("Run multicut ...")
@@ -114,6 +132,9 @@ if __name__ == "__main__":
 
         # Store multicut
         print("Write segmentation after multicut")
-        attrs = dict(get_attrs(args.raw_n5, args.raw_n5_key))
-        attrs["description"] = f"Multicut "
-        write_volume(args.output_n5, seg, args.output_n5_key + "/multicut_" + str(beta), attrs=attrs, chunks=chunks)
+        
+        ds_seg = g.create_dataset("multicut_" + str(beta), shape=shape, compression="gzip",
+                                    chunks=chunks, dtype=np.uint32)
+        ds_seg.n_threads = 8
+        print("Writing multicut")
+        ds_seg[:] = seg 

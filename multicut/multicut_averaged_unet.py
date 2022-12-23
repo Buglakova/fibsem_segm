@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 
 import elf.segmentation as eseg
 from elf.segmentation.utils import normalize_input
+from skimage.filters import gaussian
 from skimage.measure import label
 
 from cryofib.n5_utils import read_volume, write_volume, get_attrs
@@ -70,13 +71,18 @@ if __name__ == "__main__":
     # Read predictions and raw data
     roi = np.s_[:]
     raw = read_volume(args.raw_n5, args.raw_n5_key, roi)
-    boundaries = read_volume(args.pred_n5, args.pred_n5_key + "/boundaries", roi)
-    extra = read_volume(args.pred_n5, args.pred_n5_key + "/extra", roi)
+    boundaries = read_volume(args.pred_n5, args.pred_n5_key + "/2D_s0_quantile_norm_min/boundaries", roi)
+    extra = read_volume(args.pred_n5, args.pred_n5_key + "/2D_s0_quantile_norm_mean/extra", roi)
 
     # Sum up  boundaries and exrtacellular space probabilities,
     # Because otherwise some cells get joint through extracellular part
 
-    boundaries = boundaries + extra
+    extra_threshold = 0.3
+    extra_blur = gaussian(extra, sigma=1.5)
+    extra_bin = extra_blur > extra_threshold
+
+    extra_blur = gaussian(boundaries, sigma=1.5)
+    boundaries = boundaries + extra_bin
     boundaries = boundaries.astype(np.float32)
 
     # Get foreground mask
@@ -102,7 +108,7 @@ if __name__ == "__main__":
     write_volume(args.output_n5, ws, args.output_n5_key + "/ws", attrs=attrs, chunks=chunks)
 
     if beta is None:
-        betas = [0.4, 0.5, 0.6]
+        betas = [0.3, 0.4, 0.5, 0.6, 0.7]
     else:
         betas = [beta]
 
@@ -117,3 +123,10 @@ if __name__ == "__main__":
         attrs = dict(get_attrs(args.raw_n5, args.raw_n5_key))
         attrs["description"] = f"Multicut "
         write_volume(args.output_n5, seg, args.output_n5_key + "/multicut_" + str(beta), attrs=attrs, chunks=chunks)
+
+        # Assign extracellular volume
+        seg = seg + 2
+        seg[extra_bin] = 2
+        seg = seg * fg_mask
+        write_volume(args.output_n5, seg, args.output_n5_key + "/multicut_extra_" + str(beta), attrs=attrs, chunks=chunks)
+
