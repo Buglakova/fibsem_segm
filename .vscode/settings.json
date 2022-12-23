@@ -1,4 +1,6 @@
 {
-    "python.pythonPath": "/g/kreshuk/buglakova/anaconda3/envs/dl-image-pytorch-gpu/bin/python",
-    "terminal.integrated.inheritEnv": false
+    "python.pythonPath": "/g/kreshuk/buglakova/miniconda3/envs/torchem_env/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "terminal.integrated.inheritEnv": false,
+    "git.path": "/g/kreshuk/buglakova/miniconda3/envs/torchem_env/bin/git"
 }
