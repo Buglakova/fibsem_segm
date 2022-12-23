@@ -138,12 +138,18 @@ tmp*
 */checkpoints
 *.pt
 
-# Bioimage model zoo
-*/modelzoo/*
-*/bio-model/*
-
 # Random images
 *.png
 
 # Slurm output
 slurm*
+
+# Model zoo models
+**/modelzoo/
+**/bio-model
+
+# Pickled random forest from multicut workflow
+*pkl
+
+# Binary files
+**/core*
