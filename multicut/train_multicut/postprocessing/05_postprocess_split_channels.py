@@ -35,7 +35,7 @@ def main():
     
     roi = np.s_[:, :, :]
     raw = read_volume(train_multicut_path, "input/raw", roi)
-    # write_volume(postprocess_path, raw, "input/raw")
+    write_volume(network_path, raw, "input/raw")
     extra = read_volume(train_multicut_path, "predictions/extra", roi)
     boundaries = read_volume(train_multicut_path, "predictions/boundaries", roi)
     fg_mask = read_volume(train_multicut_path, "masks/fg_mask", roi)
@@ -44,13 +44,27 @@ def main():
     # Low-intensity part of boundaries
     low_int = raw < 80
     low_int = low_int * boundaries
+    low_int = (low_int > 0.99).astype(np.uint16)
     write_volume(postprocess_path, low_int, "boundaries/low_intensity")
-    
     
     # Find instance boundaries
     instance_boundaries = find_boundaries(multicut, mode="outer") * fg_mask                      
     write_volume(postprocess_path, instance_boundaries.astype(np.uint16), "boundaries/instance_boundaries")
-
+    
+    boundaries = (low_int + instance_boundaries) > 0
+    boundaries = boundaries.astype(np.uint16)
+    extra = (multicut == 2).astype(np.uint16)
+    foreground = (multicut > 2).astype(np.uint16)
+    
+    # Write channels separately
+    write_volume(network_path, foreground, "channels/foreground")
+    write_volume(network_path, boundaries, "channels/boundaries")
+    write_volume(network_path, extra, "channels/extra")
+    write_volume(network_path, (1 - fg_mask), "channels/out")
+    
+    # Write channels concatenated for training
+    channels = np.stack([foreground, boundaries, extra, (1 - fg_mask)])
+    write_volume(network_path, channels, "segmentation", chunks=[1, 1, 512, 512])
 
     
 if __name__ == "__main__":
