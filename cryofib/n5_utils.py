@@ -7,6 +7,8 @@ from elf.io import open_file
 
 
 def print_key_tree(f: z5py.File):
+    if isinstance(f, (str, PurePath)):
+        f = z5py.File(f, "r")
     print(f"Key structure of z5 file {f.filename}")
     f.visititems(lambda name, obj: print(name))
 

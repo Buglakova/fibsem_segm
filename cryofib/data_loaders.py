@@ -138,6 +138,15 @@ def load_F107_A1_pred():
     f_n5= z5py.File(n5_path, "a")
     return f_n5
 
+def load_F107_A1_corrected():
+    """
+        Get n5 file handler
+    """
+    # data_dir = Path("/g/kreshuk/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em.n5/")
+    n5_path = Path("/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em_multicut_corrected.n5/")
+    f_n5= z5py.File(n5_path, "a")
+    return f_n5
+
 
 def load_F107_A2_pred():
     """
@@ -145,5 +154,15 @@ def load_F107_A2_pred():
     """
     # data_dir = Path("/g/kreshuk/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em.n5/")
     n5_path = Path("/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A2_em_3Dunet.n5/")
+    f_n5= z5py.File(n5_path, "a")
+    return f_n5
+
+
+def load_F107_A1_multicut():
+    """
+        Get n5 file handler
+    """
+    # data_dir = Path("/g/kreshuk/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em.n5/")
+    n5_path = Path("/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em_multicut.n5/")
     f_n5= z5py.File(n5_path, "a")
     return f_n5
