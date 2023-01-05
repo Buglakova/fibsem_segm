@@ -1,14 +1,16 @@
 channels:
+    - nvidia
     - pytorch
     - conda-forge
 name:
     torchem_env
 dependencies:
+    - python>=3.9
     - affogato
     - bioimageio.core>=0.5.0
-    - cudatoolkit=11.6.0  # set correct cuda version for your system
+    - cudatoolkit=11.7.0  # set correct cuda version for your system
     - python-elf
-    - pytorch
+    - pytorch-cuda=11.7
     - tensorboard
     - tifffile
     - torchvision
