@@ -12,7 +12,7 @@ def export_model(checkpoint, output):
     raw_f = z5py.File(raw_path, "r")
     roi = np.s_[182:247, :, :]
     raw_data = read_volume(raw_f, "raw", roi)
-    z_sh, y_sh, x_sh = (16, 512, 512)
+    z_sh, y_sh, x_sh = (64, 256, 256)
     print(raw_data.shape)
     input_data = raw_data[:z_sh, :y_sh, :x_sh]
     print(input_data.shape)

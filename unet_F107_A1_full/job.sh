@@ -6,8 +6,8 @@
 #SBATCH -n 8				       # number of cores per node for the job
 #SBATCH --mem 64G			       # amount of memory per node
 #SBATCH -t 00:05:00                              # runtime of the job, acceptable time formats include "minutes", "minutes:seconds", "hours:minutes:seconds", "days-hours", "days-hours:minutes" and "days-hours:minutes:seconds". 
-#SBATCH -o /g/kreshuk/buglakova/projects/fibsem_segm/3D_unet/experiments/slurm-%j.out-%N			       # file to write the command line output to
-#SBATCH -e /g/kreshuk/buglakova/projects/fibsem_segm/3D_unet/experiments/slurm-%j.err-%N			       # file to write the error output to
+#SBATCH -o /g/kreshuk/buglakova/projects/fibsem_segm/unet_F107_A1_full/slurm-%j.out-%N			       # file to write the command line output to
+#SBATCH -e /g/kreshuk/buglakova/projects/fibsem_segm/unet_F107_A1_full/slurm-%j.err-%N			       # file to write the error output to
 #SBATCH --mail-type=BEGIN,END,FAIL		       # mail notifications types
 #SBATCH --mail-user=elena.buglakova@embl.de    # mail address for mail notifications 
 #SBATCH -p gpu-el8				       # queue to submit to; gpu-el8 - GPU queue, htc-el8 - default CPU queue

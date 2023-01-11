@@ -37,9 +37,9 @@ def get_loss(loss_name, loss_transform=None):
         assert loss_name in loss_names, f"{loss_name}, {loss_names}"
         if loss_name == "dice":
             loss_function = torch_em.loss.DiceLoss()
-        elif loss == "ce":
+        elif loss_name == "ce":
             loss_function = nn.CrossEntropyLoss()
-        elif loss == "bce":
+        elif loss_name == "bce":
             loss_function = nn.BCEWithLogitsLoss()
     else:
         loss_function = loss_name
@@ -77,15 +77,12 @@ def thick_boundary_transform(labels):
 if __name__ == "__main__":
 
     # Set paths to the train and test data
-    # Dataset consists of 9 labeled stacks => use 01 - 07 for training
-    # 08, 09 for test
-    train_data_paths = ["/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em.n5", "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em.n5", "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em.n5", "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em.n5"]
-    # train_data_paths = "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em.n5"
-    val_data_paths =  "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_em.n5"
-    data_key = "raw"
-    label_key = "segmentation/ground_truth_channels"
+    train_data_paths = "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network.n5"
+    val_data_paths =  "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network.n5"
+    data_key = "input/raw"
+    label_key = "segmentation"
 
-    experiment_name = "full_masked_dice_s0_64x256x256"
+    experiment_name = "full_dice_noaugment_nomask"
 
     # Set parameters of the network
     # patch_shape = (32, 256, 256)
@@ -99,16 +96,9 @@ if __name__ == "__main__":
     loss = "dice"
     metric = "dice"
 
-    # Roi: whole dataset
-    # all_annotated_rois = [np.s_[200:229, :, :], np.s_[279:309, :, :], np.s_[617:625, :, :], np.s_[1149:1159, :, :], np.s_[565:566, :, :]]
-    # train_rois = [np.s_[200:229, :, :], np.s_[279:309, :, :], np.s_[617:625, :, :], np.s_[1149:1159, :, :]]
-    # val_rois = [np.s_[565:566, :, :]]
-
-    # ROIs with +- 32 frames
-    train_rois = (np.s_[182:247, :, :], np.s_[262:327, :, :], np.s_[589:654, :, :], np.s_[1122:1187, :, :])
-    # train_rois = [np.s_[200:229, :, :], np.s_[279:310, :, :], np.s_[617:626, :, :], np.s_[1149:1160, :, :]]
-    # val_rois = np.s_[565:566, :, :]
-    val_rois = np.s_[533:598, :, :]
+    # ROIs: use 70% for training and 30% for testing
+    train_rois = np.s_[0:945, :, :]
+    val_rois = np.s_[945:, :, :]
 
 
     # Check inputs
@@ -116,7 +106,7 @@ if __name__ == "__main__":
     train_ds = check_data(train_data_paths, data_key, train_data_paths, label_key, train_rois)
     print("/n/n/n")
     print("Train dataset")
-    print(len(train_ds.datasets[0]))
+    # print(len(train_ds.datasets[0]))
     print("Length", len(train_ds))
     print(train_ds[0][0].shape)
     val_ds = check_data(val_data_paths, data_key, val_data_paths, label_key, val_rois)
@@ -138,11 +128,13 @@ if __name__ == "__main__":
     print("Plot several samples")
     fig = _check_plt(train_loader, 5, False)
     fig.tight_layout()
-    fig.savefig("train_loader_s0_examples.png", dpi=300)
+    fig.savefig("train_loader_examples.png", dpi=300)
 
 
-    loss_function = get_loss(loss, loss_transform=MaskIgnoreLabel(-1))
-    metric_function = get_loss(metric, loss_transform=MaskIgnoreLabel(-1))
+    # loss_function = get_loss(loss, loss_transform=MaskIgnoreLabel(-1))
+    # metric_function = get_loss(metric, loss_transform=MaskIgnoreLabel(-1))
+    loss_function = get_loss(loss, loss_transform=None)
+    metric_function = get_loss("ce", loss_transform=None)
 
 
     # loss_function = get_loss(loss, loss_transform=ApplyMask())
@@ -178,7 +170,7 @@ if __name__ == "__main__":
     # Set device
     if torch.cuda.is_available():
         print("GPU is available")
-        device = torch.device(4)
+        device = torch.device(0)
     else:
         print("GPU is not available")
         device = torch.device("cpu")
