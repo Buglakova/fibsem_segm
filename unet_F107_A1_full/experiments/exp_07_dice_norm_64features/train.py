@@ -77,12 +77,12 @@ def thick_boundary_transform(labels):
 if __name__ == "__main__":
 
     # Set paths to the train and test data
-    train_data_paths = "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network.n5"
-    val_data_paths =  "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network.n5"
-    data_key = "input/raw"
+    train_data_paths = "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network_dilated_boundaries_dilate3.n5"
+    val_data_paths =  "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network_dilated_boundaries_dilate3.n5"
+    data_key = "input/raw_norm"
     label_key = "segmentation"
 
-    experiment_name = "full_dice_noaugment_nomask_thin"
+    experiment_name = "exp_07_dice_norm_64features"
 
     # Set parameters of the network
     # patch_shape = (32, 256, 256)
@@ -97,8 +97,8 @@ if __name__ == "__main__":
     metric = "dice"
 
     # ROIs: use 70% for training and 30% for testing
-    train_rois = np.s_[0:945, :, :]
-    val_rois = np.s_[945:, :, :]
+    train_rois = np.s_[0:1000, :, :]
+    val_rois = np.s_[1000:, :, :]
 
 
     # Check inputs
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     # Anisotropy factor here 20 / 15 = 1.33
     scale_factors = [[1, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2]]
 
-    initial_features = 32
+    initial_features = 64
     final_activation = "Sigmoid"
 
     in_channels = 1
@@ -185,7 +185,8 @@ if __name__ == "__main__":
         learning_rate=learning_rate,
         mixed_precision=True,
         log_image_interval=50,
-        device=device
+        device=device,
+        optimizer_kwargs={"weight_decay": 0.0005}
     )
 
     print(trainer)

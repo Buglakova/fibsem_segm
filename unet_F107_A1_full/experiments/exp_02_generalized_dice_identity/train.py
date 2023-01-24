@@ -14,6 +14,8 @@ from torch.cuda import mem_get_info
 from pathlib import Path
 import z5py
 
+from cryofib.n5_utils import read_volume
+
 
 
 def check_data(data_paths, data_key, label_paths, label_key, rois):
@@ -74,15 +76,29 @@ def thick_boundary_transform(labels):
     return out
 
 
+def get_channel_weight(labels):
+    # Calculate the proportion of nonzero pixels per label channel, return PyTorch tensor Cx1
+    if labels.ndim == 4:
+        axes = (1, 2, 3)
+    if labels.ndim == 3:
+        axes = (1, 2)
+    weight = np.mean((1 - labels), axis=axes)
+    weight = weight / weight.sum()
+    weight = torch.Tensor(weight[:, None])
+    
+    return weight
+    
+
+
 if __name__ == "__main__":
 
     # Set paths to the train and test data
-    train_data_paths = "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network.n5"
-    val_data_paths =  "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network.n5"
-    data_key = "input/raw"
+    train_data_paths = "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network_dilated_boundaries.n5"
+    val_data_paths =  "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network_dilated_boundaries.n5"
+    data_key = "input/raw_norm"
     label_key = "segmentation"
 
-    experiment_name = "full_dice_noaugment_nomask_thin"
+    experiment_name = "full_generalized_dice_identity"
 
     # Set parameters of the network
     # patch_shape = (32, 256, 256)
@@ -128,12 +144,15 @@ if __name__ == "__main__":
     print("Plot several samples")
     fig = _check_plt(train_loader, 5, False)
     fig.tight_layout()
-    fig.savefig("train_loader_examples_thin.png", dpi=300)
+    fig.savefig("train_loader_examples.png", dpi=300)
 
 
     # loss_function = get_loss(loss, loss_transform=MaskIgnoreLabel(-1))
     # metric_function = get_loss(metric, loss_transform=MaskIgnoreLabel(-1))
-    loss_function = get_loss(loss, loss_transform=None)
+    train_labels = read_volume(train_data_paths, label_key, roi=np.s_[:, 600:945, :, :])
+    weight = get_channel_weight(train_labels)
+    print("Weights", weight.shape, weight)
+    loss_function = torch_em.loss.DiceLoss(weight=weight)
     metric_function = get_loss("ce", loss_transform=None)
 
 
@@ -161,6 +180,13 @@ if __name__ == "__main__":
     model = AnisotropicUNet(
         in_channels=in_channels, out_channels=out_channels, scale_factors=scale_factors, final_activation=final_activation
         )
+    
+    print(model)
+    print(model.encoder.blocks[0].block[0])
+    # Make initial normalization trainable
+    first_instance_norm = model.encoder.blocks[0].block[0]
+    model.encoder.blocks[0].block[0] = nn.Identity()
+    print(model)
 
     # Train
     n_iterations = 100000
@@ -176,6 +202,9 @@ if __name__ == "__main__":
         device = torch.device("cpu")
 
 
+    weight = weight.to(device=device)
+    weight.requires_grad = False
+    loss_function = torch_em.loss.DiceLoss(weight=weight)
     # Set logger ?
 
     trainer = torch_em.default_segmentation_trainer(

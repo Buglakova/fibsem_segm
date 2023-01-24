@@ -1,10 +1,12 @@
 import argparse
 import numpy as np
 import torch.nn as nn
+import torch
 import torch_em
 from torch_em.model import AnisotropicUNet
 from torch_em.util.debug import check_loader, check_trainer, _check_plt
 from torch_em.transform.raw import get_default_raw_augmentations
+from torch_em.transform.raw import get_raw_augmentations_nonorm
 from torch_em.transform.augmentation import get_augmentations
 from torch_em.loss.wrapper import MaskIgnoreLabel
 import torch
@@ -77,18 +79,19 @@ def thick_boundary_transform(labels):
 if __name__ == "__main__":
 
     # Set paths to the train and test data
-    train_data_paths = "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network.n5"
-    val_data_paths =  "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network.n5"
-    data_key = "input/raw"
+    train_data_paths = "/scratch/buglakova/data/cryofib/segm_fibsem/F059/F059_A1_em_train_network.n5/"
+    val_data_paths =  "/scratch/buglakova/data/cryofib/segm_fibsem/F059/F059_A1_em_train_network.n5/"
+    data_key = "input/raw_norm"
     label_key = "segmentation"
 
-    experiment_name = "full_dice_noaugment_nomask_thin"
+    experiment_name = "exp_10_dice_F056_A1"
 
     # Set parameters of the network
     # patch_shape = (32, 256, 256)
     # Suggested by Constantine
     
-    patch_shape = (64, 256, 256)
+    # patch_shape = (32, 256, 256)
+    patch_shape = (16, 512, 512)
     assert len(patch_shape) == 3
 
     # # Loss, metric, batch size
@@ -97,8 +100,8 @@ if __name__ == "__main__":
     metric = "dice"
 
     # ROIs: use 70% for training and 30% for testing
-    train_rois = np.s_[0:945, :, :]
-    val_rois = np.s_[945:, :, :]
+    train_rois = np.s_[770:790, :, :]
+    val_rois = np.s_[770:790, :, :]
 
 
     # Check inputs
@@ -111,13 +114,14 @@ if __name__ == "__main__":
     print(train_ds[0][0].shape)
     val_ds = check_data(val_data_paths, data_key, val_data_paths, label_key, val_rois)
 
+    raw_transforms = get_raw_augmentations_nonorm()
     transforms = ["RandomHorizontalFlip3D", "RandomVerticalFlip3D", "RandomDepthicalFlip3D"]
     transforms = get_augmentations(ndim=3, transforms=transforms)
 
     print("Create data loaders")
     train_loader = torch_em.default_segmentation_loader(
-        train_data_paths, data_key, train_data_paths, label_key,
-        batch_size, patch_shape, with_label_channels=True, rois=train_rois,
+        train_data_paths, data_key, train_data_paths, label_key, 
+        batch_size, patch_shape, with_label_channels=True, rois=train_rois, raw_transform=raw_transforms,
         transform=transforms, num_workers=8
     )
     val_loader = torch_em.default_segmentation_loader(
@@ -151,7 +155,7 @@ if __name__ == "__main__":
     # Anisotropy factor here 20 / 15 = 1.33
     scale_factors = [[1, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2]]
 
-    initial_features = 32
+    initial_features = 64
     final_activation = "Sigmoid"
 
     in_channels = 1
@@ -161,10 +165,13 @@ if __name__ == "__main__":
     model = AnisotropicUNet(
         in_channels=in_channels, out_channels=out_channels, scale_factors=scale_factors, final_activation=final_activation
         )
+    
+    ckpt = torch.load("/g/kreshuk/buglakova/projects/fibsem_segm/unet_F107_A1_full/experiments/exp_08_dice_norm_64features_16x512x512/checkpoints/exp_08_dice_norm_64features_16x512x512/best.pt")
+    model.load_state_dict(ckpt["model_state"])
 
     # Train
     n_iterations = 100000
-    learning_rate = 1.0e-4
+    learning_rate = 1.0e-5
 
 
     # Set device
@@ -185,7 +192,8 @@ if __name__ == "__main__":
         learning_rate=learning_rate,
         mixed_precision=True,
         log_image_interval=50,
-        device=device
+        device=device,
+        optimizer_kwargs={"weight_decay": 0.0005}
     )
 
     print(trainer)

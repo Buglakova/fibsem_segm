@@ -77,12 +77,12 @@ def thick_boundary_transform(labels):
 if __name__ == "__main__":
 
     # Set paths to the train and test data
-    train_data_paths = "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network.n5"
-    val_data_paths =  "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network.n5"
+    train_data_paths = "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network_dilated_boundaries.n5"
+    val_data_paths =  "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network_dilated_boundaries.n5"
     data_key = "input/raw"
     label_key = "segmentation"
 
-    experiment_name = "full_dice_noaugment_nomask_thin"
+    experiment_name = "full_dice_dilated_boundaries_lr"
 
     # Set parameters of the network
     # patch_shape = (32, 256, 256)
@@ -97,8 +97,8 @@ if __name__ == "__main__":
     metric = "dice"
 
     # ROIs: use 70% for training and 30% for testing
-    train_rois = np.s_[0:945, :, :]
-    val_rois = np.s_[945:, :, :]
+    train_rois = np.s_[500:700, :, :]
+    val_rois = np.s_[700:800, :, :]
 
 
     # Check inputs
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     print("Plot several samples")
     fig = _check_plt(train_loader, 5, False)
     fig.tight_layout()
-    fig.savefig("train_loader_examples_thin.png", dpi=300)
+    fig.savefig("train_loader_examples.png", dpi=300)
 
 
     # loss_function = get_loss(loss, loss_transform=MaskIgnoreLabel(-1))
@@ -164,7 +164,7 @@ if __name__ == "__main__":
 
     # Train
     n_iterations = 100000
-    learning_rate = 1.0e-4
+    learning_rate = 0.5 * 1.0e-4
 
 
     # Set device
