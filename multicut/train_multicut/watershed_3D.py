@@ -71,11 +71,12 @@ def main():
     # Get foreground mask
     # It's predicted weirdly by unet,
     # so better to just get biggest connected component of zeros in raw
-    fg_mask = get_fg_mask(raw)
+    fg_mask = get_fg_mask(raw).astype(bool)
+    print("Fg mask", fg_mask.shape, fg_mask.dtype, fg_mask.min(), fg_mask.max())
 
     # Compute watershed
     print("Normalize input")    
-    hmap = normalize_input(boundaries)
+    hmap = normalize_input(boundaries * fg_mask)
     threshold = 0.4
     sigma_seeds = 2.0
     block_shape = [256, 256, 256]

@@ -16,6 +16,8 @@ from cryofib.n5_utils import read_volume, write_volume, get_attrs
 def get_zero_component(img: np.ndarray):
     bg = label(img == 0)
     component_sizes = [np.count_nonzero(bg == i) for i in np.unique(bg)[1:]]
+    if len(component_sizes) == 0:
+        return img > 0
     bg_ind = np.argmax(component_sizes) + 1
     bg = (bg == bg_ind)
     fg = (bg != bg_ind)
