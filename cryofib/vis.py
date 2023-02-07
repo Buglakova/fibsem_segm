@@ -1,3 +1,4 @@
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from cryofib.preprocess_utils import percentile_norm, zero_mean_unit_variance
@@ -46,3 +47,50 @@ def plot_overlay(img1, img2, save_path=None, x_pos=None, y_pos=None, z_pos=None)
     else:
         plt.savefig(save_path, dpi=300)
     plt.close()
+    
+    
+def plot_three_slices(img, save_path, x_pos=None, y_pos=None, z_pos=None, cmap="Greys", max_pos=False):
+    """Plot slices of a 3D image along each axis.
+
+    Args:
+        img: _description_
+        save_path: _description_
+        x_pos: _description_. Defaults to None.
+        y_pos: _description_. Defaults to None.
+        z_pos: _description_. Defaults to None.
+        cmap: _description_. Defaults to "Greys".
+        max_pos: _description_. Defaults to False.
+    """
+    assert img.ndim == 3
+    if x_pos is None:
+        x_pos = int(img.shape[2] // 2)
+    if y_pos is None:
+        y_pos = int(img.shape[1] // 2)
+    if z_pos is None:
+        z_pos = int(img.shape[0] // 2)
+        
+    if max_pos:
+        z_pos, y_pos, x_pos = np.unravel_index(np.argmax(img), img.shape)
+        
+    plt.figure(figsize=(15, 5))
+    plt.subplot(1,3,1)
+    plt.title(f'z slice at {z_pos}')
+    plt.imshow(img[z_pos, :, :], cmap=cmap)
+    plt.subplot(1,3,2)
+    plt.title(f'y slice at {y_pos}')
+    plt.imshow(img[:, y_pos, :], cmap=cmap)
+    plt.subplot(1,3,3)
+    plt.title(f'x slice at {x_pos}')
+    plt.imshow(img[:, :, x_pos], cmap=cmap)
+    if save_path is None:
+        plt.show()
+    else:
+        plt.savefig(save_path, dpi=300)
+    plt.close()
+    
+    
+def get_random_cmap(cmap="jet"):
+    vals = np.linspace(0,1,256)
+    np.random.shuffle(vals)
+    random_cmap = plt.cm.colors.ListedColormap(mpl.colormaps[cmap](vals))
+    return random_cmap
