@@ -98,9 +98,10 @@ def main():
         
         # A bit more accurate commenting out
         convert_fluo = False
-        convert_A1 = True
+        convert_A1 = False
         convert_A1_annotated = False
         convert_A2 = False
+        convert_A3 = True
 
 
         # Convert fluorescent data to n5
@@ -292,6 +293,27 @@ def main():
                                 "segmentation/nuclei",
                                 attrs=em_segm_nuclei_attrs)
 
+
+        if convert_A3:
+                # em_raw, em_raw_attrs = tif2n5(tif_dir=em_path / "F107_A3_raw/",
+                #         n5_path=segmentation_dir / "F107_A3_em.n5",
+                #         n5_key="raw",
+                #         reg_exp="*.tiff",
+                #         description="Raw FIB-SEM data F107_A3",
+                #         order="zyx",
+                #         unit="nm",
+                #         resolution=(40, 30, 30),
+                #         roi=None)
+
+                em_segm_nuclei, em_segm_nuclei_attrs = tif2n5(tif_dir=em_path / "F107_A3_segm_nuclei",
+                        n5_path=registration_dir / "F107_A3_em.n5",
+                        n5_key="segmentation/nuclei",
+                        reg_exp="*.tiff",
+                        description="Nuclei segmentation done by Edoardo in Dragonfly",
+                        order="yxz",
+                        unit="nm",
+                        resolution=(30, 30, 40),
+                        roi=None)
 
 if __name__ == "__main__":
     main()
