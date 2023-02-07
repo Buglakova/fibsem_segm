@@ -1,0 +1,3 @@
+# python quantile_norm.py "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network_dilated_boundaries.n5" "input/raw" "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A1_train_network_dilated_boundaries.n5" "input/raw_norm" 0 98
+python quantile_norm.py "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A2_em.n5/" "raw_zero_bg" "/scratch/buglakova/data/cryofib/segm_fibsem/F107/F107_A2_em.n5/" "input/raw_norm" 0 98
+# python quantile_norm.py "/scratch/buglakova/data/cryofib/segm_fibsem/F059/F059_A1_em.n5/" "raw" "/scratch/buglakova/data/cryofib/segm_fibsem/F059/F059_A1_em.n5/" "input/raw_norm" 0 98  
