@@ -1,0 +1,19 @@
+#! /bin/bash
+
+#SBATCH -J F107_A1
+#SBATCH -A kreshuk                             # specify the group
+#SBATCH -N 1                                   # specify the number of cluster nodes for the job
+#SBATCH -n 8                                   # specify the number of cores per node for the job
+#SBATCH --mem 500G                               # specify the amount of memory per node
+#SBATCH -t 12:00:00                              # specify the runtime of the job IMPORTANT: your job will get killed if it exceeds this runtime (the format is d-h:mm-ss)
+#SBATCH -o slurm-%j.out-%N                         # specify the file to write the command line output to
+#SBATCH -e slurm-%j.err-%N                       # specify the file to write the error output to
+#SBATCH --mail-type=BEGIN,END,FAIL                   # specify mail notifications for your job 
+#SBATCH --mail-user=elena.buglakova@embl.de     # specify the mail address for mail notifications 
+#SBATCH -p bigmem                            # specify the queue you want to submit to: for CPU-only job (`htc-el8`) delete this line.
+
+source /home/buglakov/.bashrc
+source activate torchem
+
+# finally, your script goes here
+python /g/kreshuk/buglakova/projects/fibsem_segm/pipeline/05_trained_multicut.py /scratch/buglakova/data/cryofib/segm_fibsem/F107/multicut_pipeline/F107_A1_em_pipeline.n5 /g/kreshuk/buglakova/projects/fibsem_segm/pipeline/rf.pkl
